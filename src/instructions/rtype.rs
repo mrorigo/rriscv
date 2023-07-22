@@ -52,8 +52,8 @@ impl Display for Instruction<Rtype> {
     }
 }
 
+#[allow(non_snake_case)]
 impl Instruction<Rtype> {
-    #[allow(non_snake_case)]
     pub fn MUL(itype: Rtype) -> Instruction<Rtype> {
         Instruction {
             mnemonic: &"MUL",
@@ -64,6 +64,25 @@ impl Instruction<Rtype> {
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: args.rd,
                     value: core.bit_extend(r1v.wrapping_mul(r2v) as i64) as u64,
+                }))
+            },
+        }
+    }
+
+    pub fn MULH(itype: Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"MULH",
+            args: Some(itype),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1);
+                let r2v = core.read_register(args.rs2);
+                let value = match core.xlen {
+                    Xlen::Bits32 => core.bit_extend((r1v as i64 * r2v as i64) >> 32) as u64,
+                    Xlen::Bits64 => ((r1v as i128) * (r2v as i128) >> 64) as u64,
+                };
+                Stage::WRITEBACK(Some(WritebackStage {
+                    register: args.rd,
+                    value: value,
                 }))
             },
         }
