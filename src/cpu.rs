@@ -8,6 +8,13 @@ pub type RegisterValue = u64;
 type Registers = [RegisterValue; 32];
 type CSRRegisters = [RegisterValue; 4096];
 
+macro_rules! cpu_trace {
+    ($instr:expr) => {
+        print!("CPU_TRACE: ");
+        $instr;
+    };
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
 pub enum Xlen {
@@ -168,14 +175,17 @@ impl<'a> Core<'a> {
     }
 
     pub fn read_register(&self, reg: Register) -> RegisterValue {
-        match reg {
+        let v = match reg {
             0 => 0,
             _ => self.registers[reg as usize],
-        }
+        };
+        cpu_trace!(println!("read_register x{:#?} = {:#x?}", reg, v));
+        v
     }
 
     pub fn write_register(&mut self, reg: Register, value: RegisterValue) {
         if reg != 0 {
+            cpu_trace!(println!("write_register x{:#?} = {:#x?}", reg, value));
             self.registers[reg as usize] = value;
         } else {
             panic!("Should never write to register x0")
