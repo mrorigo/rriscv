@@ -1,7 +1,7 @@
 use quark::Signs;
 
 use crate::{
-    cpu::{Core, Register},
+    cpu::{Core, Register, Xlen},
     pipeline::{Stage, WritebackStage},
 };
 
@@ -26,22 +26,26 @@ impl ImmediateDecoder<u16, u16> for CItype {
     }
 }
 
+#[allow(non_snake_case)]
 impl Instruction<CItype> {
-    #[allow(non_snake_case)]
     fn C_LUI(citype: CItype) -> Instruction<CItype> {
         Instruction {
             mnemonic: "C.LUI",
             args: Some(citype),
             funct: |core, args| {
+                let value = ((args.imm as u64) << 12); //(core.xlen as u64 - 20));
+                debug_trace!(println!(
+                    "C.LUI x{}, {:#x?} ; x{} = {:#x?}",
+                    args.rd, args.imm, args.rd, value
+                ));
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: args.rd,
-                    value: ((args.imm as u64) << (core.xlen as u64 - 20)),
+                    value,
                 }))
             },
         }
     }
 
-    #[allow(non_snake_case)]
     fn C_ADDI(citype: CItype) -> Instruction<CItype> {
         Instruction {
             mnemonic: "C.ADDI",
@@ -59,7 +63,7 @@ impl Instruction<CItype> {
 }
 
 impl InstructionSelector<CItype> for CItype {
-    fn select(&self) -> Instruction<CItype> {
+    fn select(&self, _xlen: Xlen) -> Instruction<CItype> {
         match self.opcode {
             CompressedOpcode::C1 => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
                 C1_Funct3::C_LUI => Instruction::C_LUI(*self),

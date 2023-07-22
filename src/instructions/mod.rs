@@ -1,4 +1,14 @@
-use crate::{cpu::Core, pipeline::Stage};
+use crate::{
+    cpu::{Core, Xlen},
+    pipeline::Stage,
+};
+
+macro_rules! debug_trace {
+    ($instr:expr) => {
+        print!("DEBUG_TRACE: ");
+        $instr;
+    };
+}
 
 pub mod btype;
 pub mod cbtype;
@@ -61,7 +71,7 @@ pub trait InstructionExcecutor {
 }
 
 pub trait InstructionSelector<T> {
-    fn select(&self) -> Instruction<T> {
+    fn select(&self, _xlen: Xlen) -> Instruction<T> {
         Instruction {
             mnemonic: &"ILLEGAL",
             args: None,

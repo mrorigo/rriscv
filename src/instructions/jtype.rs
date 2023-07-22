@@ -1,6 +1,6 @@
 use crate::{
-    cpu::{Core, Register},
-    pipeline::Stage,
+    cpu::{Core, Register, Xlen},
+    pipeline::{Stage, WritebackStage},
 };
 
 use super::{
@@ -12,6 +12,30 @@ pub struct Jtype {
     pub opcode: MajorOpcode,
     pub rd: Register,
     pub imm20: u32,
+}
+
+#[allow(non_snake_case)]
+impl Instruction<Jtype> {
+    pub fn JAL(jtype: Jtype) -> Instruction<Jtype> {
+        Instruction {
+            mnemonic: "JAL",
+            args: Some(jtype),
+            funct: |core, args| {
+                const M: u32 = 1 << (20 - 1);
+                let se_imm20 = ((args.imm20 << 1) ^ M) - M;
+                let target = core.prev_pc + se_imm20 as u64;
+                //println!("JAL: core.pc: {:#x?}  se_imm20: {:#x?}", core.pc, se_imm20);
+                core.set_pc(target);
+
+                debug_trace!(println!("JAL {:#x?}", target));
+
+                Stage::WRITEBACK(Some(WritebackStage {
+                    register: args.rd,
+                    value: core.pc,
+                }))
+            },
+        }
+    }
 }
 
 impl ImmediateDecoder<u32, u32> for Jtype {
@@ -26,7 +50,14 @@ impl ImmediateDecoder<u32, u32> for Jtype {
     }
 }
 
-impl InstructionSelector<Jtype> for Jtype {}
+impl InstructionSelector<Jtype> for Jtype {
+    fn select(&self, xlen: Xlen) -> Instruction<Jtype> {
+        match self.opcode {
+            MajorOpcode::JAL => Instruction::JAL(*self),
+            _ => panic!(),
+        }
+    }
+}
 
 impl InstructionExcecutor for Instruction<Jtype> {
     fn run(&self, core: &mut Core) -> Stage {

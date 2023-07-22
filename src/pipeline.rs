@@ -1,3 +1,5 @@
+use elfloader::VAddr;
+
 use crate::{
     cpu::{CSRRegister, Core, PrivMode, Register},
     instructions::{
@@ -9,14 +11,14 @@ use crate::{
 
 #[derive(Debug, Copy, Clone)]
 pub enum MemoryAccess {
-    READ8(usize, Register),
-    READ16(usize, Register),
-    READ32(usize, Register),
-    READ64(usize, Register),
-    WRITE8(usize, u8),
-    WRITE16(usize, u16),
-    WRITE32(usize, u32),
-    WRITE64(usize, u64),
+    READ8(VAddr, Register),
+    READ16(VAddr, Register),
+    READ32(VAddr, Register),
+    READ64(VAddr, Register),
+    WRITE8(VAddr, u8),
+    WRITE16(VAddr, u16),
+    WRITE32(VAddr, u32),
+    WRITE64(VAddr, u64),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -95,20 +97,20 @@ impl PipelineStages for Core<'_> {
 
     fn execute(&mut self, decoded: &DecodedInstruction) -> Stage {
         match *decoded {
-            DecodedInstruction::I(inst) => inst.select().run(self),
-            DecodedInstruction::U(inst) => inst.select().run(self),
-            DecodedInstruction::CI(param) => param.select().run(self),
-            DecodedInstruction::J(param) => param.select().run(self),
-            DecodedInstruction::CR(param) => param.select().run(self),
-            DecodedInstruction::B(param) => param.select().run(self),
-            DecodedInstruction::S(param) => param.select().run(self),
-            DecodedInstruction::R(param) => param.select().run(self),
-            DecodedInstruction::CSS(param) => param.select().run(self),
-            DecodedInstruction::CIW(param) => param.select().run(self),
-            DecodedInstruction::CL(param) => param.select().run(self),
-            DecodedInstruction::CS(param) => param.select().run(self),
-            DecodedInstruction::CB(param) => param.select().run(self),
-            DecodedInstruction::CJ(param) => param.select().run(self),
+            DecodedInstruction::I(inst) => inst.select(self.xlen).run(self),
+            DecodedInstruction::U(inst) => inst.select(self.xlen).run(self),
+            DecodedInstruction::CI(param) => param.select(self.xlen).run(self),
+            DecodedInstruction::J(param) => param.select(self.xlen).run(self),
+            DecodedInstruction::CR(param) => param.select(self.xlen).run(self),
+            DecodedInstruction::B(param) => param.select(self.xlen).run(self),
+            DecodedInstruction::S(param) => param.select(self.xlen).run(self),
+            DecodedInstruction::R(param) => param.select(self.xlen).run(self),
+            DecodedInstruction::CSS(param) => param.select(self.xlen).run(self),
+            DecodedInstruction::CIW(param) => param.select(self.xlen).run(self),
+            DecodedInstruction::CL(param) => param.select(self.xlen).run(self),
+            DecodedInstruction::CS(param) => param.select(self.xlen).run(self),
+            DecodedInstruction::CB(param) => param.select(self.xlen).run(self),
+            DecodedInstruction::CJ(param) => param.select(self.xlen).run(self),
         }
     }
 
@@ -118,72 +120,49 @@ impl PipelineStages for Core<'_> {
                 register: register,
                 value: self
                     .memory
-                    .read_single(
-                        offset as u64 + self.memory.get_base_address(),
-                        MemoryAccessWidth::BYTE,
-                    )
+                    .read_single(offset, MemoryAccessWidth::BYTE)
                     .unwrap(),
             })),
             MemoryAccess::READ16(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
                 register: register,
                 value: self
                     .memory
-                    .read_single(
-                        offset as u64 + self.memory.get_base_address(),
-                        MemoryAccessWidth::HALFWORD,
-                    )
+                    .read_single(offset, MemoryAccessWidth::HALFWORD)
                     .unwrap(),
             })),
             MemoryAccess::READ32(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
                 register: register,
                 value: self
                     .memory
-                    .read_single(
-                        offset as u64 + self.memory.get_base_address(),
-                        MemoryAccessWidth::WORD,
-                    )
+                    .read_single(offset, MemoryAccessWidth::WORD)
                     .unwrap(),
             })),
             MemoryAccess::READ64(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
                 register: register,
                 value: self
                     .memory
-                    .read_single(
-                        offset as u64 + self.memory.get_base_address(),
-                        MemoryAccessWidth::LONG,
-                    )
+                    .read_single(offset, MemoryAccessWidth::LONG)
                     .unwrap(),
             })),
             MemoryAccess::WRITE8(offset, value) => {
-                self.memory.write_single(
-                    offset as u64 + self.memory.get_base_address(),
-                    value as u64,
-                    MemoryAccessWidth::BYTE,
-                );
+                self.memory
+                    .write_single(offset, value as u64, MemoryAccessWidth::BYTE);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE16(offset, value) => {
-                self.memory.write_single(
-                    offset as u64 + self.memory.get_base_address(),
-                    value as u64,
-                    MemoryAccessWidth::HALFWORD,
-                );
+                self.memory
+                    .write_single(offset, value as u64, MemoryAccessWidth::HALFWORD);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE32(offset, value) => {
-                self.memory.write_single(
-                    offset as u64 + self.memory.get_base_address(),
-                    value as u64,
-                    MemoryAccessWidth::WORD,
-                );
+                self.memory
+                    .write_single(offset, value as u64, MemoryAccessWidth::WORD);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE64(offset, value) => {
-                self.memory.write_single(
-                    offset as u64 + self.memory.get_base_address(),
-                    value as u64,
-                    MemoryAccessWidth::LONG,
-                );
+                println!("cpu::memory::WRITE64: {:#x?} @ {:#x?}", value, offset);
+                self.memory
+                    .write_single(offset, value as u64, MemoryAccessWidth::LONG);
                 Stage::WRITEBACK(None)
             }
         }

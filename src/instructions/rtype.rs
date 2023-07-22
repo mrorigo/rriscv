@@ -1,5 +1,7 @@
+use std::fmt::Display;
+
 use crate::{
-    cpu::{Core, Register},
+    cpu::{Core, Register, Xlen},
     pipeline::{Stage, WritebackStage},
 };
 
@@ -18,9 +20,24 @@ pub struct Rtype {
     pub funct7: u8,
 }
 
+impl Display for Instruction<Rtype> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.args.is_some() {
+            write!(f, "{}", self.mnemonic)
+        } else {
+            let args = self.args.unwrap();
+            write!(
+                f,
+                "{} x{},x{},x{}",
+                self.mnemonic, args.rd, args.rs1, args.rs2
+            )
+        }
+    }
+}
+
 impl Instruction<Rtype> {
     #[allow(non_snake_case)]
-    fn MUL(itype: Rtype) -> Instruction<Rtype> {
+    pub fn MUL(itype: Rtype) -> Instruction<Rtype> {
         Instruction {
             mnemonic: &"MUL",
             args: Some(itype),
@@ -37,7 +54,7 @@ impl Instruction<Rtype> {
 }
 
 impl InstructionSelector<Rtype> for Rtype {
-    fn select(&self) -> Instruction<Rtype> {
+    fn select(&self, _xlen: Xlen) -> Instruction<Rtype> {
         match self.opcode {
             MajorOpcode::OP => match self.funct7 {
                 // RV32M

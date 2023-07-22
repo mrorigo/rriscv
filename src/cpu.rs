@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+
+use crate::instructions::Instruction;
 use crate::memory::MemoryOperations;
 use crate::pipeline::{PipelineStages, Stage};
 

@@ -3,7 +3,7 @@ use std::fmt::Display;
 use quark::Signs;
 
 use crate::{
-    cpu::{Core, Register},
+    cpu::{Core, Register, Xlen},
     pipeline::{Stage, WritebackStage},
 };
 
@@ -22,9 +22,9 @@ pub struct Itype {
     pub imm12: u16,
 }
 
+#[allow(non_snake_case)]
 impl Instruction<Itype> {
-    #[allow(non_snake_case)]
-    fn CSRRS(itype: Itype) -> Instruction<Itype> {
+    pub fn CSRRS(itype: Itype) -> Instruction<Itype> {
         Instruction {
             mnemonic: &"CSRRS",
             args: Some(itype),
@@ -43,17 +43,21 @@ impl Instruction<Itype> {
         }
     }
 
-    #[allow(non_snake_case)]
-    fn ADDI(itype: Itype) -> Instruction<Itype> {
+    pub fn ADDI(itype: Itype) -> Instruction<Itype> {
         Instruction {
             mnemonic: &"ADDI",
             args: Some(itype),
             funct: |core, args| {
+                let rs1v = core.read_register(args.rs1) as i64;
+                let seimm = (args.imm12 as u64).sign_extend(64 - 12);
+                let value = core.bit_extend(rs1v.wrapping_add(seimm as i64)) as u64;
+                debug_trace!(println!(
+                    "ADDI x{}, x{}, {}  ; x{} = {:#x?}",
+                    args.rd, args.rs1, seimm as i64, args.rd, value
+                ));
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: args.rd,
-                    value: core
-                        .read_register(args.rs1)
-                        .wrapping_add((args.imm12 as u64).sign_extend(64 - 12)),
+                    value,
                 }))
             },
         }
@@ -68,15 +72,15 @@ impl Display for Instruction<Itype> {
             let args = self.args.unwrap();
             write!(
                 f,
-                "{} x{}, {}(x{})",
-                self.mnemonic, args.rd, args.imm12, args.rs1
+                "{} x{},x{},{}",
+                self.mnemonic, args.rd, args.rs1, args.imm12,
             )
         }
     }
 }
 
 impl InstructionSelector<Itype> for Itype {
-    fn select(&self) -> Instruction<Itype> {
+    fn select(&self, _xlen: Xlen) -> Instruction<Itype> {
         match self.opcode {
             MajorOpcode::OP_IMM => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
                 OpImmFunct3::ADDI => Instruction::ADDI(*self),

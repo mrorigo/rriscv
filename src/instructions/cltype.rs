@@ -24,7 +24,11 @@ impl ImmediateDecoder<u16, u16> for CLtype {
     }
 }
 
-impl InstructionSelector<CLtype> for CLtype {}
+impl InstructionSelector<CLtype> for CLtype {
+    fn select(&self, _xlen: crate::cpu::Xlen) -> Instruction<CLtype> {
+        todo!()
+    }
+}
 impl InstructionExcecutor for Instruction<CLtype> {
     fn run(&self, core: &mut Core) -> Stage {
         (self.funct)(core, &self.args.unwrap())

@@ -1,6 +1,8 @@
 use std::mem;
 use std::ptr;
 
+use elfloader::VAddr;
+
 // type VAddr = u64;
 // type PAddr = u64;
 
@@ -88,12 +90,12 @@ pub struct Memory {
 #[allow(unused_variables)]
 pub trait MemoryOperations: std::fmt::Debug {
     fn get_base_address(&self) -> u64;
-    fn read_single(&self, addr: u64, memory_access_width: MemoryAccessWidth) -> Option<u64> {
+    fn read_single(&self, addr: VAddr, memory_access_width: MemoryAccessWidth) -> Option<u64> {
         None
     }
     fn write_single(
         &mut self,
-        addr: u64,
+        addr: VAddr,
         value: u64,
         memory_access_width: MemoryAccessWidth,
     ) -> bool {
@@ -102,7 +104,7 @@ pub trait MemoryOperations: std::fmt::Debug {
 }
 
 impl MemoryOperations for Memory {
-    fn write_single(&mut self, addr: u64, value: u64, maw: MemoryAccessWidth) -> bool {
+    fn write_single(&mut self, addr: VAddr, value: u64, maw: MemoryAccessWidth) -> bool {
         //        println!("write_single @ {:#x} base={:#x}", addr, self.base_address);
         assert!(
             addr >= self.base_address,
@@ -110,13 +112,20 @@ impl MemoryOperations for Memory {
             addr,
             self.base_address
         );
-        assert!(
-            addr < self.size.checked_add(self.base_address as usize).unwrap() as u64,
-            "addr {:#x?} >= {:#x?} ",
-            addr,
-            self.size.checked_add(self.base_address as usize).unwrap()
-        );
+        // assert!(
+        //     addr < (self.size as u64).checked_add(self.base_address).unwrap(),
+        //     "addr {:#x?} >= {:#x?} ",
+        //     addr,
+        //     self.size.checked_add(self.base_address as usize).unwrap()
+        // );
         let offs = addr - self.base_address;
+        assert!(
+            offs < self.size as u64,
+            "addr={:#x?}  base={:#x?} offs={:#x?}",
+            addr,
+            self.base_address,
+            offs
+        );
         match maw {
             MemoryAccessWidth::BYTE => unsafe {
                 ptr::write(self.data.offset(offs as isize), (value & 0xff) as u8);
@@ -138,7 +147,7 @@ impl MemoryOperations for Memory {
     }
 
     // @TODO: Will panic if reading out of bounds
-    fn read_single(&self, addr: u64, maw: MemoryAccessWidth) -> Option<u64> {
+    fn read_single(&self, addr: VAddr, maw: MemoryAccessWidth) -> Option<u64> {
         // println!(
         //     "read_single {:?} @ {:#x} base={:#x}",
         //     maw, addr, self.base_address
