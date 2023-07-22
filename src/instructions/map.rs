@@ -1,31 +1,4 @@
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-#[repr(u8)]
-pub enum InstructionFormat {
-    Unknown = 0,
-    // 2.2 Base instruction formats
-    R,
-    I,
-    S,
-    U,
-    // 2.3 Immediate Encoding Variants
-    B,
-    J,
-}
-
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-#[repr(u8)]
-pub enum CompressedInstructionFormat {
-    Unknown = 0,
-    // Table 12.1: Compressed 16-bit RVC instruction formats.
-    CR,
-    CI,
-    CSS,
-    CIW,
-    CL,
-    CS,
-    CB,
-    CJ,
-}
+use crate::instructions::{CompressedInstructionFormat, InstructionFormat};
 
 pub const COMPRESSED_FORMAT_MAP: [CompressedInstructionFormat; 32] = [
     CompressedInstructionFormat::CIW, // 0

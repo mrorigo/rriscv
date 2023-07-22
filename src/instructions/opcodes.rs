@@ -1,5 +1,3 @@
-extern crate num;
-
 pub const FUNCT7_SHIFT: u8 = 11;
 pub const FUNCT7_MASK: u16 = (1 << FUNCT7_SHIFT) - 1;
 //const FUNCT7: u16 = 1 << FUNCT7_SHIFT;
@@ -39,41 +37,6 @@ pub enum CompressedOpcode {
     C1 = 0b01,
     C2 = 0b10,
     C3 = 0b11,
-}
-
-#[derive(Debug, PartialEq, FromPrimitive)]
-#[repr(u8)]
-pub enum OpImmFunct3 {
-    ADDI = 0b000,
-    SLTI = 0b010,
-    SLTIU = 0b011,
-    XORI = 0b100,
-    ORI = 0b110,
-    ANDI = 0b111,
-}
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, PartialEq, FromPrimitive)]
-pub enum CSR_Funct3 {
-    CSRRW = 0b001,
-    CSRRS = 0b010,
-    CSRRC = 0b011,
-    CSRRWI = 0b101,
-    CSRRSI = 0b110,
-    CSRRCI = 0b111,
-}
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, PartialEq, FromPrimitive)]
-pub enum RV32M_Funct3 {
-    MUL = 0b000,
-    MULH = 0b001,
-    MULHSU = 0b010,
-    MULSHU = 0b011,
-    DIV = 0b100,
-    DIVU = 0b101,
-    REM = 0b110,
-    REMU = 0b111,
 }
 
 /// Each opcode encoded together with the funct3 and func7 bits as a 32 bit number:

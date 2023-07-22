@@ -8,11 +8,9 @@ extern crate num_derive;
 // use crate::memory::{Memory, MemoryOperations};
 
 pub mod cpu;
-pub mod decoder;
 pub mod elf;
-pub mod instruction_format;
+pub mod instructions;
 pub mod memory;
-pub mod opcodes;
 pub mod pipeline;
 
 // fn main() {

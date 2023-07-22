@@ -1,6 +1,9 @@
 use crate::{
-    cpu::{CSRRegister, Core, ExecutionStage, PrivMode, Register},
-    decoder::{DecodedInstruction, InstructionDecoder},
+    cpu::{CSRRegister, Core, PrivMode, Register},
+    instructions::{
+        decoder::{DecodedInstruction, InstructionDecoder},
+        InstructionExcecutor, InstructionSelector,
+    },
     memory::MemoryAccessWidth,
 };
 
@@ -47,19 +50,66 @@ pub trait PipelineStages {
     fn execute(&mut self, decoded: &DecodedInstruction) -> Stage;
     fn memory(&mut self, memory_access: &MemoryAccess) -> Stage;
     fn writeback(&mut self, writeback: Option<WritebackStage>) -> Stage;
-    fn enter_trap(&self) -> Stage;
-    fn exit_trap(&self) -> Stage;
+    fn enter_trap(&mut self) -> Stage;
+    fn exit_trap(&mut self) -> Stage;
 }
 
 impl PipelineStages for Core<'_> {
-    fn enter_trap(&self) -> Stage {
-        todo!("pipeline: ENTER TRAP");
-        Stage::EXIT_TRAP
+    fn fetch(&mut self) -> Stage {
+        let instruction = self
+            .memory
+            .read_single(self.pc, MemoryAccessWidth::WORD)
+            .unwrap() as u32;
+
+        println!("fetch: instruction @ {:#x}: {:#x}", self.pc, instruction);
+
+        // Determine if instruction is compressed
+        let instruction = match (instruction & 0x3) == 0x03 {
+            true => {
+                self.pc += 4;
+                RawInstruction {
+                    compressed: false,
+                    word: instruction,
+                    pc: self.pc - 4,
+                }
+            }
+            false => {
+                self.pc += 2;
+                println!("fetch: compressed instruction {:#x?}", instruction & 0xffff);
+                RawInstruction {
+                    compressed: true,
+                    word: instruction & 0xffff,
+                    pc: self.pc - 2,
+                }
+            }
+        };
+        Stage::DECODE(instruction)
     }
 
-    fn exit_trap(&self) -> Stage {
-        todo!("pipeline: EXIT TRAP");
-        Stage::FETCH
+    fn decode(&mut self, instruction: &RawInstruction) -> Stage {
+        self.prev_pc = instruction.pc;
+        let decoded = (self as &dyn InstructionDecoder).decode_instruction(*instruction);
+        println!("decode: decoded: {:?}", decoded);
+        Stage::EXECUTE(decoded)
+    }
+
+    fn execute(&mut self, decoded: &DecodedInstruction) -> Stage {
+        match *decoded {
+            DecodedInstruction::I(inst) => inst.select().run(self),
+            DecodedInstruction::U(inst) => inst.select().run(self),
+            DecodedInstruction::CI(param) => param.select().run(self),
+            DecodedInstruction::J(param) => param.select().run(self),
+            DecodedInstruction::CR(param) => param.select().run(self),
+            DecodedInstruction::B(param) => param.select().run(self),
+            DecodedInstruction::S(param) => param.select().run(self),
+            DecodedInstruction::R(param) => param.select().run(self),
+            DecodedInstruction::CSS(param) => param.select().run(self),
+            DecodedInstruction::CIW(param) => param.select().run(self),
+            DecodedInstruction::CL(param) => param.select().run(self),
+            DecodedInstruction::CS(param) => param.select().run(self),
+            DecodedInstruction::CB(param) => param.select().run(self),
+            DecodedInstruction::CJ(param) => param.select().run(self),
+        }
     }
 
     fn memory(&mut self, memory_access: &MemoryAccess) -> Stage {
@@ -161,61 +211,11 @@ impl PipelineStages for Core<'_> {
         Stage::FETCH
     }
 
-    fn execute(&mut self, decoded: &DecodedInstruction) -> Stage {
-        let param: &dyn ExecutionStage = match decoded {
-            DecodedInstruction::I(param) => param,
-            DecodedInstruction::J(param) => param,
-            DecodedInstruction::U(param) => param,
-            DecodedInstruction::CR(param) => param,
-            DecodedInstruction::B(param) => param,
-            DecodedInstruction::S(param) => param,
-            DecodedInstruction::R(param) => param,
-            DecodedInstruction::CI(param) => param,
-            DecodedInstruction::CSS(param) => param,
-            DecodedInstruction::CIW(param) => param,
-            DecodedInstruction::CL(param) => param,
-            DecodedInstruction::CS(param) => param,
-            DecodedInstruction::CB(param) => param,
-            DecodedInstruction::CJ(param) => param,
-        };
-        param.execute(self)
+    fn enter_trap(&mut self) -> Stage {
+        Stage::EXIT_TRAP
     }
 
-    fn decode(&mut self, instruction: &RawInstruction) -> Stage {
-        self.prev_pc = instruction.pc;
-        let decoded = (self as &dyn InstructionDecoder).decode_instruction(*instruction);
-        println!("decode: decoded: {:?}", decoded);
-        Stage::EXECUTE(decoded)
-    }
-
-    fn fetch(&mut self) -> Stage {
-        let instruction = self
-            .memory
-            .read_single(self.pc, MemoryAccessWidth::WORD)
-            .unwrap() as u32;
-
-        println!("fetch: instruction @ {:#x}: {:#x}", self.pc, instruction);
-
-        // Determine if instruction is compressed
-        let instruction = match (instruction & 0x3) == 0x03 {
-            true => {
-                self.pc += 4;
-                RawInstruction {
-                    compressed: false,
-                    word: instruction,
-                    pc: self.pc - 4,
-                }
-            }
-            false => {
-                self.pc += 2;
-                println!("fetch: compressed instruction {:#x?}", instruction & 0xffff);
-                RawInstruction {
-                    compressed: true,
-                    word: instruction & 0xffff,
-                    pc: self.pc - 2,
-                }
-            }
-        };
-        Stage::DECODE(instruction)
+    fn exit_trap(&mut self) -> Stage {
+        Stage::FETCH
     }
 }

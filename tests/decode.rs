@@ -3,9 +3,16 @@
 use rriscv::{
     self,
     cpu::{self, Core},
-    decoder::{CSStype, DecodedInstruction, InstructionDecoder, Itype, Jtype, Stype, Utype},
+    instructions::itype::Itype,
+    instructions::jtype::Jtype,
+    instructions::{
+        csstype::CSStype,
+        decoder::DecodedInstruction,
+        opcodes::{CompressedOpcode, MajorOpcode},
+        stype::Stype,
+    },
+    instructions::{decoder::InstructionDecoder, utype::Utype},
     memory::Memory,
-    opcodes::{CompressedOpcode, MajorOpcode},
     pipeline::RawInstruction,
 };
 
@@ -59,7 +66,7 @@ pub struct TestCase {
     decoded: DecodedInstruction,
 }
 
-test_case! {lui1, TestCase::create(&"LUI X14,0x2004", 0x02004737,false, DecodedInstruction::U(Utype { opcode: MajorOpcode::LUI, rd: 14, imm20: 0x2004}))}
+test_case! {lui1, TestCase::create(&"LUI X14,0x2004", 0x02004737,false, DecodedInstruction::U(Utype{ opcode: MajorOpcode::LUI, rd: 14, imm20: 0x2004}))}
 test_case! {lui2, TestCase::create(&"LUI X14,0x7ff4", 0x07ff4737, false, DecodedInstruction::U(Utype { opcode: MajorOpcode::LUI, rd: 14, imm20: 0x7ff4}))}
 test_case! {auipc, TestCase::create(&"AUIPC X2,0x9", 0x00009117, false, DecodedInstruction::U(Utype {opcode: MajorOpcode::AUIPC, rd: 2, imm20:0x09}))}
 test_case! {jal, TestCase::create(&"JAL X1,0x9", 0x076000ef, false, DecodedInstruction::J(Jtype {opcode: MajorOpcode::JAL, imm20: 0x3b, rd:1}))}
