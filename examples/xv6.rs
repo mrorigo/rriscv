@@ -71,31 +71,13 @@ fn main() {
             cpu.debug_breakpoint(cpu::TrapCause::Breakpoint, mmu);
         }
         cpu.cycle(mmu);
-        cpu.write_csr(
-            cpu::CSRRegister::mip,
-            mmu.tick(cpu.read_csr(cpu::CSRRegister::mip)),
-        );
 
         match cpu.stage {
             Stage::FETCH => {
-                //println!("xv6: ticked: {:#x?}", cpu.prev_pc);
-                // let key = cpu.pc() as u64;
-                // match symbols.get(&key) {
-                //     None => {}
-                //     Some(symbol) => {
-                //         println!(
-                //             "\n==== xv6: Executing from symbol {:?} @ {:#x?} ====\n",
-                //             symbol, key
-                //         )
-                //     }
-                // }
-
-                //let instret = cpu.read_csr(CSRRegister::instret);
-                // println!(
-                //     "--- minstret: {}  instret: {}",
-                //     cpu.read_csr(CSRRegister::minstret),
-                //     instret
-                // )
+                cpu.write_csr(
+                    cpu::CSRRegister::mip,
+                    mmu.tick(cpu.read_csr(cpu::CSRRegister::mip)),
+                );
             }
             Stage::TRAP(cause) => match cause {
                 TrapCause::Breakpoint => {
@@ -106,6 +88,4 @@ fn main() {
             _ => {}
         }
     }
-    // cpu.cycle();
-    // cpu.cycle();
 }
