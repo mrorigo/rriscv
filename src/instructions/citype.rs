@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use quark::Signs;
 
 use crate::{
@@ -6,10 +8,9 @@ use crate::{
 };
 
 use super::{
-    ciwtype::CIWtype,
     functions::{C1_Funct3, Funct3},
     opcodes::CompressedOpcode,
-    CompressedFormat, CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder, Instruction,
+    CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder, Instruction,
     InstructionExcecutor, InstructionSelector,
 };
 
@@ -76,6 +77,31 @@ impl Instruction<CItype> {
             },
         }
     }
+
+    pub fn C_LI(citype: CItype) -> Instruction<CItype> {
+        Instruction {
+            mnemonic: "C.LI",
+            args: Some(citype),
+            funct: |core, args| {
+                let value = (args.imm as u64).sign_extend(64 - 6);
+                Stage::WRITEBACK(Some(WritebackStage {
+                    register: args.rd,
+                    value: value,
+                }))
+            },
+        }
+    }
+}
+
+impl Display for Instruction<CItype> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.args.is_some() {
+            write!(f, "{}", self.mnemonic)
+        } else {
+            let args = self.args.unwrap();
+            write!(f, "{} x{},{}", self.mnemonic, args.rd, args.imm,)
+        }
+    }
 }
 
 impl InstructionSelector<CItype> for CItype {
@@ -84,6 +110,7 @@ impl InstructionSelector<CItype> for CItype {
             CompressedOpcode::C1 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                 C1_Funct3::C_LUI => Instruction::C_LUI(*self),
                 C1_Funct3::C_ADDI => Instruction::C_ADDI(*self),
+                C1_Funct3::C_LI => Instruction::C_LI(*self),
                 _ => panic!(),
             },
             _ => panic!(),
@@ -93,6 +120,7 @@ impl InstructionSelector<CItype> for CItype {
 
 impl InstructionExcecutor for Instruction<CItype> {
     fn run(&self, core: &mut Core) -> Stage {
+        debug_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }
