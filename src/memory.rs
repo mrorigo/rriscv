@@ -18,7 +18,7 @@ pub trait MemoryCellType {}
 impl MemoryCellType for u8 {}
 
 #[allow(unused_variables)]
-pub trait MemoryOperations<T, T2: MemoryCellType>: std::fmt::Debug {
+pub trait MemoryOperations<T, T2: MemoryCellType> {
     fn read8(&self, addr: VAddr) -> Option<T2>;
     fn write8(&mut self, addr: VAddr, value: T2) -> bool;
 

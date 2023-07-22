@@ -3,10 +3,12 @@ use include_bytes_aligned::include_bytes_aligned;
 
 use crate::{
     memory::{MemoryOperations, RAMOperations},
-    mmio::{PhysicalMemory, VirtualDevice, CLINT, PLIC, UART, VIRTIO},
+    mmio::{PhysicalMemory, VirtualDevice, CLINT, PLIC},
+    uart::UART,
+    virtio::VIRTIO,
 };
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct MemoryRange {
     pub name: &'static str,
     pub start: VAddr,
@@ -30,7 +32,7 @@ impl MemoryRange {
     }
 }
 
-#[derive(Debug)]
+//#[derive(Debug)]
 pub struct MMU {
     memory: PhysicalMemory,
     uart: UART,
@@ -91,6 +93,8 @@ impl MemoryOperations<MMU, u8> for MMU {
             self.clint.read32(addr)
         } else if self.plic.includes(addr) {
             self.plic.read32(addr)
+        } else if self.virtio.includes(addr) {
+            self.virtio.read32(addr)
         } else {
             panic!("read32 only supported for RAM memory, tried {:#x?}", addr)
         }
@@ -103,6 +107,8 @@ impl MemoryOperations<MMU, u8> for MMU {
             self.clint.write32(addr, value)
         } else if self.plic.includes(addr) {
             self.plic.write32(addr, value)
+        } else if self.virtio.includes(addr) {
+            self.virtio.write32(addr, value)
         } else {
             panic!(
                 "write32 only supported for CLINT & RAM memory: {:#x?}",
@@ -141,6 +147,8 @@ impl MMU {
     pub fn tick(&mut self) {
         self.uart.tick();
         self.clint.tick();
+        self.plic.tick();
+        self.virtio.tick();
     }
 
     pub fn protect_range(&mut self, range: MemoryRange) {
@@ -213,7 +221,10 @@ impl MMU {
 
     pub fn dump_device_table(&self) {
         for i in 0..self.device_table.len() {
-            println!("{:x?}", self.device_table[i]);
+            println!(
+                "{:?} - {:#x?}-{:#x?}",
+                self.device_table[i].name, self.device_table[i].start, self.device_table[i].end
+            );
         }
     }
 }
