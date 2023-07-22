@@ -100,6 +100,7 @@ pub enum OpImm32_Funct3 {
 #[repr(u8)]
 pub enum Op32_Funct3 {
     ADDW_SUBW = 0b000,
+    SLLW = 0b001,
 }
 
 #[allow(non_camel_case_types)]

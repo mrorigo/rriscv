@@ -110,6 +110,7 @@ impl Instruction<Itype> {
             funct: |core, args| {
                 let csr_register = num::FromPrimitive::from_u16(args.imm12).unwrap();
                 let value = core.read_csr(csr_register);
+                println!("CSRRC read value {:#x?}", value);
                 if args.rs1 != 0 {
                     let rs1v = core.read_register(args.rs1);
                     core.write_csr(csr_register, value & !rs1v);
@@ -239,6 +240,37 @@ impl Instruction<Itype> {
             },
         }
     }
+
+    pub fn SLTI(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"SLTI",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1) as i64;
+                let value = match rs1v < (args.imm12 as i64).sign_extend(64 - 12) {
+                    true => 1,
+                    false => 0,
+                };
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
+    pub fn SLTIU(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"SLTI",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1) as u64;
+                let value = match rs1v < args.imm12 as u64 {
+                    true => 1,
+                    false => 0,
+                };
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
     pub fn SRLI(args: &Itype) -> Instruction<Itype> {
         Instruction {
             mnemonic: &"SRLI",
@@ -526,6 +558,8 @@ impl InstructionSelector<Itype> for Itype {
                         _ => panic!("{:?} is unknown Funct7 for SRLI_SRAI", self.funct7),
                     }
                 }
+                OpImm_Funct3::SLTI => Instruction::SLTI(self),
+                OpImm_Funct3::SLTIU => Instruction::SLTI(self),
                 _ => panic!(),
             },
             MajorOpcode::SYSTEM => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {

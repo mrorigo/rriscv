@@ -36,8 +36,7 @@ impl FormatDecoder<Rtype> for Rtype {
             funct3: num::FromPrimitive::from_u8(((word >> 12) & 7) as u8).unwrap(),
             funct7: num::FromPrimitive::from_u8(((word >> 25) & 0x7f) as u8)
                 .unwrap_or(Funct7::B0000000),
-            funct5: num::FromPrimitive::from_u8(((word >> 27) & 0x1f) as u8)
-                .unwrap_or(Funct5::AMOADD_W), // @FIXME: Default?
+            funct5: num::FromPrimitive::from_u8(((word >> 27) & 0x1f) as u8).unwrap(), // @FIXME: Default?
         }
     }
 }
@@ -144,13 +143,13 @@ impl Instruction<Rtype> {
         }
     }
 
-    pub fn MULH(args: Rtype) -> Instruction<Rtype> {
+    pub fn MULH(args: &Rtype) -> Instruction<Rtype> {
         Instruction {
             mnemonic: &"MULH",
-            args: Some(args),
+            args: Some(*args),
             funct: |core, args| {
-                let r1v = core.read_register(args.rs1);
-                let r2v = core.read_register(args.rs2);
+                let r1v = core.read_register(args.rs1) as i64;
+                let r2v = core.read_register(args.rs2) as i64;
                 let value = match core.xlen {
                     Xlen::Bits32 => core.bit_extend((r1v as i64 * r2v as i64) >> 32) as u64,
                     Xlen::Bits64 => ((r1v as i128) * (r2v as i128) >> 64) as u64,
@@ -181,6 +180,48 @@ impl Instruction<Rtype> {
                 let r1v = core.read_register(args.rs1) as i32;
                 let r2v = core.read_register(args.rs2) as i32;
                 let value = core.bit_extend((r1v.wrapping_sub(r2v)) as i64) as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
+    pub fn SLLW(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"SLLW",
+            args: Some(*args),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1) as u32;
+                let r2v = core.read_register(args.rs2) as u32;
+                let value = r1v.wrapping_shl(r2v) as u32 as i32 as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
+    pub fn SRLW(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"SRLW",
+            args: Some(*args),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1) as u32;
+                let r2v = core.read_register(args.rs2) as u32;
+                let value = r1v.wrapping_shr(r2v) as u32 as i32 as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
+    pub fn SLT(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"SLT",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1) as i32;
+                let rs2v = core.read_register(args.rs2) as i32;
+                let value = match rs1v < rs2v {
+                    true => 1,
+                    false => 0,
+                };
                 Stage::writeback(args.rd, value)
             },
         }
@@ -260,6 +301,11 @@ impl InstructionSelector<Rtype> for Rtype {
                     _ => Instruction::MUL(self),
                 },
                 _ => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
+                    Op32_Funct3::SLLW => match self.funct7 {
+                        Funct7::B0100000 => Instruction::SRLW(self),
+                        Funct7::B0000000 => Instruction::SLLW(self),
+                        _ => panic!(),
+                    },
                     Op32_Funct3::ADDW_SUBW => match self.funct7 {
                         Funct7::B0000000 => todo!("ADDW"),
                         Funct7::B0100000 => Instruction::SUBW(self),
@@ -271,6 +317,7 @@ impl InstructionSelector<Rtype> for Rtype {
                 // RV32M
                 Funct7::M_EXT => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                     RV32M_Funct3::MUL => Instruction::MUL(self),
+                    RV32M_Funct3::MULH => Instruction::MULH(self),
                     _ => panic!(),
                 },
                 Funct7::B0100000 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
@@ -286,6 +333,7 @@ impl InstructionSelector<Rtype> for Rtype {
                     Op_Funct3::XOR => Instruction::XOR(self),
                     Op_Funct3::SLTU => Instruction::SLTU(self),
                     Op_Funct3::SLL => Instruction::SLL(self),
+                    Op_Funct3::SLT => Instruction::SLT(self),
                     _ => todo!(),
                 },
                 // _ => todo!("R-type Funct7 not supported"),

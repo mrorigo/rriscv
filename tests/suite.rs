@@ -8,10 +8,10 @@ use rriscv::{
     pipeline::Stage,
 };
 
-const CASES: [&str; 30] = [
+const CASES: [&str; 45] = [
     //"../../git/riscv-tests/isa/rv64mi-p-access",
     //"../../git/riscv-tests/isa/rv64mi-p-breakpoint",
-    //"../../git/riscv-tests/isa/rv64mi-p-csr",
+    "../../git/riscv-tests/isa/rv64mi-p-csr",
     //"../../git/riscv-tests/isa/rv64mi-p-illegal",
     // "../../git/riscv-tests/isa/rv64mi-p-ld-misaligned",
     // "../../git/riscv-tests/isa/rv64mi-p-lh-misaligned",
@@ -126,6 +126,7 @@ const CASES: [&str; 30] = [
     "../../git/riscv-tests/isa/rv64ui-p-and",
     "../../git/riscv-tests/isa/rv64ui-p-andi",
     "../../git/riscv-tests/isa/rv64ui-p-sub",
+    "../../git/riscv-tests/isa/rv64ui-p-subw",
     "../../git/riscv-tests/isa/rv64ui-p-auipc",
     "../../git/riscv-tests/isa/rv64ui-p-beq",
     "../../git/riscv-tests/isa/rv64ui-p-bge",
@@ -147,33 +148,34 @@ const CASES: [&str; 30] = [
     // "../../git/riscv-tests/isa/rv64ui-p-ma_data",
     "../../git/riscv-tests/isa/rv64ui-p-or",
     "../../git/riscv-tests/isa/rv64ui-p-ori",
-    // "../../git/riscv-tests/isa/rv64ui-p-sb",
-    // "../../git/riscv-tests/isa/rv64ui-p-sd",
-    // "../../git/riscv-tests/isa/rv64ui-p-sh",
+    "../../git/riscv-tests/isa/rv64ui-p-sb",
+    "../../git/riscv-tests/isa/rv64ui-p-sd",
+    "../../git/riscv-tests/isa/rv64ui-p-sh",
     // "../../git/riscv-tests/isa/rv64ui-p-simple",
-    ////"../../git/riscv-tests/isa/rv64ui-p-sll",
-    ////"../../git/riscv-tests/isa/rv64ui-p-slli",
-    ////"../../git/riscv-tests/isa/rv64ui-p-slliw",
-    //"../../git/riscv-tests/isa/rv64ui-p-sllw",
-    //"../../git/riscv-tests/isa/rv64ui-p-slt",
-    //"../../git/riscv-tests/isa/rv64ui-p-slti",
-    //"../../git/riscv-tests/isa/rv64ui-p-sltiu",
-    ////"../../git/riscv-tests/isa/rv64ui-p-sltu",
-    //"../../git/riscv-tests/isa/rv64ui-p-sra",
-    //"../../git/riscv-tests/isa/rv64ui-p-srai",
-    ////"../../git/riscv-tests/isa/rv64ui-p-sraiw",
+    "../../git/riscv-tests/isa/rv64ui-p-sll",
+    "../../git/riscv-tests/isa/rv64ui-p-slli",
+    "../../git/riscv-tests/isa/rv64ui-p-slliw",
+    "../../git/riscv-tests/isa/rv64ui-p-sllw",
+    "../../git/riscv-tests/isa/rv64ui-p-slt",
+    "../../git/riscv-tests/isa/rv64ui-p-slti",
+    "../../git/riscv-tests/isa/rv64ui-p-sltiu",
+    "../../git/riscv-tests/isa/rv64ui-p-sltu",
+    "../../git/riscv-tests/isa/rv64ui-p-sra",
+    "../../git/riscv-tests/isa/rv64ui-p-srai",
+    "../../git/riscv-tests/isa/rv64ui-p-sraiw",
     //"../../git/riscv-tests/isa/rv64ui-p-sraw",
     //"../../git/riscv-tests/isa/rv64ui-p-srl",
-    "../../git/riscv-tests/isa/rv64ui-v-sb",
-    "../../git/riscv-tests/isa/rv64ui-v-sd",
-    "../../git/riscv-tests/isa/rv64ui-v-sh",
+    // "../../git/riscv-tests/isa/rv64ui-v-sb",
+    // "../../git/riscv-tests/isa/rv64ui-v-sd",
+    // "../../git/riscv-tests/isa/rv64ui-v-sh",
     "../../git/riscv-tests/isa/rv64ui-p-sw",
     "../../git/riscv-tests/isa/rv64ui-p-srli",
+    "../../git/riscv-tests/isa/rv64um-p-mul",
+    "../../git/riscv-tests/isa/rv64um-p-mulh",
 ];
 
 ///"../../git/riscv-tests/isa/rv64ui-p-srliw",
 //"../../git/riscv-tests/isa/rv64ui-p-srlw",
-// "../../git/riscv-tests/isa/rv64ui-p-subw",
 // "../../git/riscv-tests/isa/rv64ui-p-sw",
 // "../../git/riscv-tests/isa/rv64ui-p-xor",
 // "../../git/riscv-tests/isa/rv64ui-p-xori",
@@ -230,8 +232,6 @@ const CASES: [&str; 30] = [
 // "../../git/riscv-tests/isa/rv64um-p-divu",
 // "../../git/riscv-tests/isa/rv64um-p-divuw",
 // "../../git/riscv-tests/isa/rv64um-p-divw",
-// "../../git/riscv-tests/isa/rv64um-p-mul",
-// "../../git/riscv-tests/isa/rv64um-p-mulh",
 // "../../git/riscv-tests/isa/rv64um-p-mulhsu",
 // "../../git/riscv-tests/isa/rv64um-p-mulhu",
 // "../../git/riscv-tests/isa/rv64um-p-mulw",
@@ -256,12 +256,13 @@ const CASES: [&str; 30] = [
 
 #[test]
 fn all_cases() {
+    let mut failed = false;
     for argument in CASES.iter() {
         println!("========== {:?} ==========", argument);
-        case(&argument.to_string());
+        failed |= !case(&argument.to_string());
         println!("");
     }
-    assert!(false);
+    assert!(!failed);
 }
 
 fn case(name: &str) -> bool {
@@ -269,18 +270,15 @@ fn case(name: &str) -> bool {
     use std::fs;
 
     let vbase: u64 = 0x8000_0000;
-    //    let mmu = MMU::create();
-    // println!("DTB Device Table:");
-    // mmu.dump_device_table();
-
     let mmu = &mut MMU::create();
 
     //    let binary_blob = fs::read("examples/xv6/kernel.min").expect("Can't read kernel binary");
-    let binary_blob = fs::read(name).expect("Can't read kernel binary");
-    //let binary_blob = fs::read("./test").expect("Can't read kernel binary");
+    let binary_blob = fs::read(name).expect("Can't read binary");
     let binary = ElfBinary::new(binary_blob.as_slice()).expect("Got proper ELF file");
     let mut loader = elf::Loader::create(vbase, mmu);
-    binary.load(&mut loader).expect("Can't load the binary?");
+    binary
+        .load(&mut loader)
+        .expect("Can't load the binary to memory?");
 
     let mut symbols: HashMap<u64, &str> = HashMap::new();
 
@@ -312,6 +310,10 @@ fn case(name: &str) -> bool {
                 match symbols.get(&key) {
                     None => {}
                     Some(symbol) => match *symbol {
+                        "terminate" => {
+                            println!("CASE: {}: WTF! ", name);
+                            return false;
+                        }
                         "fail" => {
                             println!("CASE: {}: fail ", name);
                             return false;

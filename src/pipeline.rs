@@ -2,7 +2,7 @@ use elfloader::VAddr;
 use quark::Signs;
 
 use crate::{
-    cpu::{CSRRegister, Core, PrivMode, Register, RegisterValue, TrapCause},
+    cpu::{CSRRegister, Core, PrivMode, Register, RegisterValue, TrapCause, Xlen},
     instructions::{
         decoder::{DecodedInstruction, InstructionDecoder},
         InstructionExcecutor, InstructionSelector,
@@ -248,12 +248,19 @@ impl PipelineStages for Core {
                     "m:    AMOSWAP.W @ {:#x?} = {:#x?} now {:#x?}",
                     from, v1, rs2v
                 ));
+
                 // "AMOs can be used to implement parallel reduction operations,
                 //   where typically the return value would be discarded by writing to x0."
                 if rd == 0 {
                     Stage::WRITEBACK(None)
                 } else {
-                    Stage::writeback(rd, v1 as u64)
+                    //  AMOs can either operate on 64-bit (RV64 only) or 32-bit words in memory.
+                    // For RV64, 32-bit AMOs always sign-extend the value placed in rd. T
+                    let value = match self.xlen {
+                        Xlen::Bits32 => v1 as u64,
+                        Xlen::Bits64 => v1 as i32 as i64 as u64,
+                    };
+                    Stage::writeback(rd, value as u64)
                 }
             }
             MemoryAccess::AMOSWAP_D(_from, _to, _rd) => todo!(),
@@ -263,7 +270,7 @@ impl PipelineStages for Core {
     fn writeback(&mut self, writeback: Option<WritebackStage>) -> Stage {
         match writeback {
             Some(wb) if wb.register > 0 => {
-                pipeline_trace!(println!("w: x{} = {:#x?}", wb.register, wb.value));
+                (println!("w: x{} = {:#x?}", wb.register, wb.value));
 
                 self.write_register(wb.register, wb.value)
             }

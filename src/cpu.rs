@@ -313,10 +313,10 @@ impl Core {
             CSRRegister::time => todo!(),
 
             _ => {
-                //cpu_trace!(println!("write_csr {:#x?} = {:#x?}", reg, value));
                 self.csrs[reg as usize] = value;
             }
         }
+        cpu_trace!(println!("write_csr {:#x?} = {:#x?}", reg, value));
     }
 
     pub fn read_register(&self, reg: Register) -> RegisterValue {
@@ -338,7 +338,7 @@ impl Core {
     }
 
     pub fn cycle(&mut self, mmu: &mut MMU) {
-        cpu_trace!(println!("stage: {:?}", self.stage));
+        //cpu_trace!(println!("stage: {:?}", self.stage));
         self.stage = match self.stage {
             Stage::ENTER_TRAP(cause) => self.enter_trap(cause),
             Stage::EXIT_TRAP => self.exit_trap(),
