@@ -3,7 +3,7 @@ use std::fmt::Display;
 use quark::Signs;
 
 use crate::{
-    cpu::{Core, Register},
+    cpu::{Core, Register, Xlen},
     pipeline::Stage,
 };
 
@@ -20,6 +20,7 @@ pub struct CBtype {
     pub rs1: Register,
     pub offset: u16,
     pub funct3: Funct3,
+    pub funct2: u8,
     pub imm6: u8,
 }
 
@@ -32,7 +33,8 @@ impl CompressedFormatDecoder<CBtype> for CBtype {
             opcode: num::FromPrimitive::from_u8((word & 3) as u8).unwrap(),
             rs1: 8 + ((word >> 7) & 3) as u8,
             offset: CBtype::decode_immediate(word as u16),
-            imm6: (((word >> 1) & 0b1111) | ((word >> 12) & 1) << 5) as u8,
+            imm6: (((word >> 2) & 0b1111) | ((word >> 12) & 1) << 5) as u8,
+            funct2: ((word >> 10) & 0b11) as u8,
             funct3: num::FromPrimitive::from_u8(((word >> 13) & 0x7) as u8).unwrap(),
         }
     }
@@ -91,6 +93,22 @@ impl Instruction<CBtype> {
             },
         }
     }
+    /// C.BNEZ takes the branch if the value in register rs1 is NOT zero.
+    pub fn C_BNEZ(args: &CBtype) -> Instruction<CBtype> {
+        Instruction {
+            args: Some(*args),
+            mnemonic: "C.BNEZ",
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1);
+                if rs1v != 0 {
+                    let target =
+                        ((args.offset as i64).sign_extend(64 - 9) + core.prev_pc as i64) as u64;
+                    core.set_pc(target)
+                }
+                Stage::WRITEBACK(None)
+            },
+        }
+    }
 
     pub fn C_ANDI(args: &CBtype) -> Instruction<CBtype> {
         Instruction {
@@ -105,6 +123,43 @@ impl Instruction<CBtype> {
             },
         }
     }
+
+    pub fn C_SRLI(args: &CBtype) -> Instruction<CBtype> {
+        Instruction {
+            mnemonic: &"C.SRLI",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1);
+                // the shift amount is encoded in the lower 6 bits of the I-immediate field for RV64I.
+                let mask = match core.xlen {
+                    Xlen::Bits32 => 0x1f,
+                    Xlen::Bits64 => 0x3f,
+                };
+
+                let shamt = (args.imm6) & mask;
+                let value = ((rs1v as u64) >> shamt);
+                Stage::writeback(args.rs1, value)
+            },
+        }
+    }
+    pub fn C_SRAI(args: &CBtype) -> Instruction<CBtype> {
+        Instruction {
+            mnemonic: &"C.SRAI",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1);
+                // the shift amount is encoded in the lower 6 bits of the I-immediate field for RV64I.
+                let mask = match core.xlen {
+                    Xlen::Bits32 => 0x1f,
+                    Xlen::Bits64 => 0x3f,
+                };
+                let shamt = (args.imm6) & mask;
+                println!("C.SRAI shamt: {:?}", shamt);
+                let value = ((rs1v as i64).wrapping_shr(shamt as u32)) as u64;
+                Stage::writeback(args.rs1, value)
+            },
+        }
+    }
 }
 
 impl InstructionSelector<CBtype> for CBtype {
@@ -112,7 +167,13 @@ impl InstructionSelector<CBtype> for CBtype {
         match self.opcode {
             CompressedOpcode::C1 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                 C1_Funct3::C_BEQZ => Instruction::C_BEQZ(self),
-                C1_Funct3::C_ANDI => Instruction::C_ANDI(self),
+                C1_Funct3::C_BNEZ => Instruction::C_BNEZ(self),
+                C1_Funct3::C_ANDI => match self.funct2 {
+                    0b00 => Instruction::C_SRLI(self),
+                    0b01 => Instruction::C_SRAI(self),
+                    0b10 => Instruction::C_ANDI(self),
+                    _ => panic!(),
+                },
                 _ => todo!(),
             },
             _ => panic!(),

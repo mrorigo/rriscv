@@ -35,11 +35,12 @@ impl CompressedFormatDecoder<CSStype> for CSStype {
 
 impl ImmediateDecoder<u16, u16> for CSStype {
     fn decode_immediate(i: u16) -> u16 {
-        let offset = ((i >> 7) & 0x38) | // offset[5:3] <= [12:10]
-                        ((i >> 1) & 0x1c0); // offset[8:6] <= [9:7]
-        let imm11_5 = (offset >> 5) & 0x3f;
-        let imm4_0 = offset & 0x1f;
-        (imm11_5 << 5) | (imm4_0)
+        ((i >> 7) & 0x3c) | ((i >> 1) & 0xc0)
+        // let offset = ((i >> 7) & 0x38) | // offset[5:3] <= [12:10]
+        //                 ((i >> 1) & 0x1c0); // offset[8:6] <= [9:7]
+        // let imm11_5 = (offset >> 5) & 0x3f;
+        // let imm4_0 = offset & 0x1f;
+        // (imm11_5 << 5) | (imm4_0)
     }
 }
 
@@ -76,6 +77,26 @@ impl Instruction<CSStype> {
         }
     }
 
+    pub fn C_SWSP(args: &CSStype) -> Instruction<CSStype> {
+        Instruction {
+            args: Some(*args),
+            mnemonic: "C.SWSP",
+            funct: |core, args| {
+                let sp = core.read_register(2);
+                let addr = sp + (args.uimm as u64);
+                let rs2v = core.read_register(args.rs2);
+                instruction_trace!(println!(
+                    "C.SWSP: args.uimm={:#x?}  rs2v: {:#x?}  sp={:#x?}  addr={:#x?}",
+                    (args.uimm as u64),
+                    rs2v,
+                    sp,
+                    addr
+                ));
+                Stage::MEMORY(MemoryAccess::WRITE32(addr, rs2v as u32))
+            },
+        }
+    }
+
     pub fn C_FSWSP(args: &CSStype) -> Instruction<CSStype> {
         Instruction {
             args: Some(*args),
@@ -88,6 +109,7 @@ impl Instruction<CSStype> {
 impl InstructionSelector<CSStype> for CSStype {
     fn select(&self, xlen: Xlen) -> Instruction<CSStype> {
         match self.funct3 {
+            Funct3::B110 => Instruction::C_SWSP(self),
             // C.FSWSP or C.SDSP
             Funct3::B111 => match xlen {
                 Xlen::Bits32 => Instruction::C_FSWSP(self),

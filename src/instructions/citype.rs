@@ -50,7 +50,7 @@ impl ImmediateDecoder<u16, u16> for CItype {
 
 #[allow(non_snake_case)]
 impl Instruction<CItype> {
-    fn C_ADDI16SP(args: &CItype) -> Instruction<CItype> {
+    pub fn C_ADDI16SP(args: &CItype) -> Instruction<CItype> {
         Instruction {
             mnemonic: "C.ADDI16SP",
             args: Some(*args),
@@ -75,22 +75,22 @@ impl Instruction<CItype> {
         }
     }
 
-    fn C_LUI(args: &CItype) -> Instruction<CItype> {
+    pub fn C_LUI(args: &CItype) -> Instruction<CItype> {
         Instruction {
             mnemonic: "C.LUI",
             args: Some(*args),
             funct: |_core, args| {
-                let value = ((args.imm as u64) << 12) as u32 as u64;
-                // instruction_trace!(println!(
-                //     "C.LUI x{}, {:#x?} ; x{} = {:#x?}",
-                //     args.rs1_rd, args.imm, args.rs1_rd, value
-                // ));
+                let value = (args.imm as u64).sign_extend(64 - 6) << 12;
+                instruction_trace!(println!(
+                    "C.LUI x{}, {:#x?} ; x{} = {:#x?}",
+                    args.rs1_rd, args.imm, args.rs1_rd, value as i64
+                ));
                 Stage::writeback(args.rs1_rd, value)
             },
         }
     }
 
-    fn C_ADDI(args: &CItype) -> Instruction<CItype> {
+    pub fn C_ADDI(args: &CItype) -> Instruction<CItype> {
         Instruction {
             mnemonic: "C.ADDI",
             args: Some(*args),
@@ -123,20 +123,41 @@ impl Instruction<CItype> {
 
     pub fn C_LDSP(args: &CItype) -> Instruction<CItype> {
         Instruction {
-            mnemonic: &"LD",
+            mnemonic: &"C.LDSP",
             args: Some(*args),
             funct: |core, args| {
                 let ze_imm = args.imm as u64;
                 let sp = core.read_register(2);
-                let addr = sp + (ze_imm << 3);
-                instruction_trace!(println!(
-                    "C.LDSP: sp={:#x?} ze_imm={:#x?} addr={:#x?}",
-                    sp, ze_imm, addr
-                ));
+                let addr = sp + (ze_imm);
+                // instruction_trace!(println!(
+                //     "C.LDSP: sp={:#x?} ze_imm={:#x?} addr={:#x?}",
+                //     sp, ze_imm, addr
+                // ));
                 Stage::MEMORY(crate::pipeline::MemoryAccess::READ64(
                     addr,
                     args.rs1_rd,
                     false,
+                ))
+            },
+        }
+    }
+
+    pub fn C_LWSP(args: &CItype) -> Instruction<CItype> {
+        Instruction {
+            mnemonic: &"C.LWSP",
+            args: Some(*args),
+            funct: |core, args| {
+                let ze_imm = args.imm as u64;
+                let sp = core.read_register(2);
+                let addr = sp + (ze_imm);
+                instruction_trace!(println!(
+                    "C.LWSP: sp={:#x?} ze_imm={:#x?} addr={:#x?}",
+                    sp, ze_imm, addr
+                ));
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ32(
+                    addr,
+                    args.rs1_rd,
+                    true,
                 ))
             },
         }
@@ -198,6 +219,7 @@ impl InstructionSelector<CItype> for CItype {
             CompressedOpcode::C2 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                 C2_Funct3::C_SLLI => Instruction::C_SLLI(self),
                 C2_Funct3::C_LDSP => Instruction::C_LDSP(self),
+                C2_Funct3::C_LWSP => Instruction::C_LWSP(self),
                 _ => panic!(),
             },
             _ => panic!("opcode {:#x?} unknown for CIType", self.opcode),

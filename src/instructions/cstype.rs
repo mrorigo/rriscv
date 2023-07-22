@@ -65,16 +65,48 @@ impl Display for Instruction<CStype> {
     }
 }
 
+macro_rules! cs_operation {
+    ($args:expr) => {
+        |core, args| {
+            let rs1v = core.read_register(args.rs1_rd);
+            let rs2v = core.read_register(args.rs2);
+            let value = $args(core, rs1v, rs2v);
+            Stage::writeback(args.rs1_rd, value)
+        }
+    };
+}
+
 #[allow(non_snake_case)]
 impl Instruction<CStype> {
     pub fn C_AND(args: &CStype) -> Instruction<CStype> {
         Instruction {
             args: Some(*args),
             mnemonic: "C.AND",
+            funct: cs_operation!(|core, rs1v, rs2v| rs1v & rs2v),
+        }
+    }
+
+    pub fn C_SUBW(args: &CStype) -> Instruction<CStype> {
+        Instruction {
+            mnemonic: &"SUBW",
+            args: Some(*args),
             funct: |core, args| {
-                let rs1v = core.read_register(args.rs1_rd);
-                let rs2v = core.read_register(args.rs2);
-                let value = rs1v & rs2v;
+                let r1v = core.read_register(args.rs1_rd) as i32;
+                let r2v = core.read_register(args.rs2) as i32;
+                let value = core.bit_extend((r1v.wrapping_sub(r2v)) as i64) as u64;
+                Stage::writeback(args.rs1_rd, value)
+            },
+        }
+    }
+
+    pub fn C_ADDW(args: &CStype) -> Instruction<CStype> {
+        Instruction {
+            mnemonic: &"C.ADDW",
+            args: Some(*args),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1_rd) as i32;
+                let r2v = core.read_register(args.rs2) as i32;
+                let value = core.bit_extend((r1v.wrapping_add(r2v)) as i64) as u64;
                 Stage::writeback(args.rs1_rd, value)
             },
         }
@@ -84,36 +116,27 @@ impl Instruction<CStype> {
         Instruction {
             args: Some(*args),
             mnemonic: "C.OR",
-            funct: |core, args| {
-                let rs1v = core.read_register(args.rs1_rd);
-                let rs2v = core.read_register(args.rs2);
-                let value = rs1v | rs2v;
-                Stage::writeback(args.rs1_rd, value)
-            },
+            funct: cs_operation!(|core, rs1v, rs2v| rs1v | rs2v),
         }
     }
 
-    pub fn C_SRLI(args: &CStype) -> Instruction<CStype> {
+    pub fn C_XOR(args: &CStype) -> Instruction<CStype> {
         Instruction {
             args: Some(*args),
-            mnemonic: &"C.SRLI",
-            funct: |core, args| {
-                let rs1v = core.read_register(args.rs1_rd);
-                let value = rs1v >> args.shamt;
-                Stage::writeback(args.rs1_rd, value)
-            },
+            mnemonic: "C.XOR",
+            funct: cs_operation!(|core, rs1v, rs2v| rs1v ^ rs2v),
         }
     }
 
-    pub fn C_SRAI(args: &CStype) -> Instruction<CStype> {
+    pub fn C_SUB(args: &CStype) -> Instruction<CStype> {
         Instruction {
+            mnemonic: &"C.SUB",
             args: Some(*args),
-            mnemonic: &"C.SRAI",
             funct: |core, args| {
-                let _rs1v = core.read_register(args.rs1_rd);
-                let _rs2v = core.read_register(args.rs2);
-                let _value = todo!();
-                //Stage::writeback(args.rs1_rd, value)
+                let r1v = core.read_register(args.rs1_rd) as i64;
+                let r2v = core.read_register(args.rs2) as i64;
+                let value = core.bit_extend((r1v.wrapping_sub(r2v)) as i64) as u64;
+                Stage::writeback(args.rs1_rd, value)
             },
         }
     }
@@ -161,16 +184,18 @@ impl InstructionSelector<CStype> for CStype {
             },
             CompressedOpcode::C1 => match self.funct6 {
                 0b100011 => match self.funct2 {
-                    0b00 => todo!(),
-                    0b01 => todo!(),
+                    0b00 => Instruction::C_SUB(self),
+                    0b01 => Instruction::C_XOR(self),
                     0b10 => Instruction::C_OR(self),
                     0b11 => Instruction::C_AND(self),
                     _ => panic!(),
                 },
-                0b100000 => Instruction::C_SRLI(self),
-                0b100001 => Instruction::C_SRAI(self),
-
-                _ => panic!(),
+                0b100111 => match self.funct2 {
+                    0b00 => Instruction::C_SUBW(self),
+                    0b01 => Instruction::C_ADDW(self),
+                    _ => panic!("reserved instruction?"),
+                },
+                _ => panic!("{:#x?}", self.funct6),
             },
             _ => panic!(),
         }

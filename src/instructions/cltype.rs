@@ -46,19 +46,33 @@ impl ImmediateDecoder<u16, u16> for CLtype {
 
 #[allow(non_snake_case)]
 impl Instruction<CLtype> {
-    fn C_LW(args: &CLtype) -> Instruction<CLtype> {
+    pub fn C_LW(args: &CLtype) -> Instruction<CLtype> {
         Instruction {
             mnemonic: "C.LW",
             args: Some(*args),
             funct: |core, args| {
                 let rs1v = core.read_register(args.rs1) as i64;
                 let addr = rs1v.wrapping_add(args.imm as i64) as u64;
-                instruction_trace!(println!(
-                    "C.LW: rs1v={:#x?} imm={:#x?} addr={:#x?}",
-                    rs1v, args.imm, addr
-                ));
-                instruction_trace!(println!("C.LW x{}, {}(x{})", args.rd, args.imm, args.rs1));
+                // instruction_trace!(println!(
+                //     "C.LW: rs1v={:#x?} imm={:#x?} addr={:#x?}",
+                //     rs1v, args.imm, addr
+                // ));
                 Stage::MEMORY(crate::pipeline::MemoryAccess::READ32(addr, args.rd, true))
+            },
+        }
+    }
+    pub fn C_LD(args: &CLtype) -> Instruction<CLtype> {
+        Instruction {
+            mnemonic: "C.LD",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1) as i64;
+                let addr = rs1v.wrapping_add(args.imm as i64) as u64;
+                // instruction_trace!(println!(
+                //     "C.LW: rs1v={:#x?} imm={:#x?} addr={:#x?}",
+                //     rs1v, args.imm, addr
+                // ));
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ64(addr, args.rd, false))
             },
         }
     }
@@ -84,6 +98,7 @@ impl InstructionSelector<CLtype> for CLtype {
         match self.opcode {
             CompressedOpcode::C0 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                 C0_Funct3::C_LW => Instruction::C_LW(self),
+                C0_Funct3::C_LD => Instruction::C_LD(self),
                 _ => todo!(),
             },
             _ => panic!(),
