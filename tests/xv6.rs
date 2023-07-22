@@ -36,7 +36,11 @@ fn main() {
         cpu.cycle();
         match cpu.stage {
             Stage::FETCH => {
-                println!("--- minstret: {}", cpu.read_csr(CSRRegister::minstret))
+                println!(
+                    "--- minstret: {}  instret: {}",
+                    cpu.read_csr(CSRRegister::minstret),
+                    cpu.read_csr(CSRRegister::instret)
+                )
             }
             _ => {}
         }
