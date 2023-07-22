@@ -29,6 +29,7 @@ pub enum C0_Funct3 {
 #[repr(u8)]
 pub enum OpImm_Funct3 {
     ADDI = 0b000,
+    SLLI = 0b001,
     SLTI = 0b010,
     SLTIU = 0b011,
     XORI = 0b100,

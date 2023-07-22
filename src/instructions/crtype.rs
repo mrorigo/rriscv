@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     cpu::{Core, Register, Xlen},
-    pipeline::{Stage, WritebackStage},
+    pipeline::Stage,
 };
 
 use super::{

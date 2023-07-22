@@ -152,6 +152,23 @@ impl Instruction<Itype> {
         }
     }
 
+    pub fn SLLI(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"SLLI",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1);
+                // the shift amount is encoded in the lower 6 bits of the I-immediate field for RV64I.
+                let mask = match core.xlen {
+                    Xlen::Bits32 => 0x1f,
+                    Xlen::Bits64 => 0x3f,
+                };
+                let shamt = (args.imm12) & mask;
+                let value = ((rs1v as i64) << shamt) as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
     pub fn SLLIW(args: &Itype) -> Instruction<Itype> {
         Instruction {
             mnemonic: &"SLLIW",
@@ -205,6 +222,7 @@ impl InstructionSelector<Itype> for Itype {
             MajorOpcode::OP_IMM => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
                 OpImm_Funct3::ADDI => Instruction::ADDI(self),
                 OpImm_Funct3::ORI => Instruction::ORI(self),
+                OpImm_Funct3::SLLI => Instruction::SLLI(self),
                 _ => panic!(),
             },
             MajorOpcode::SYSTEM => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
