@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../../../git/riscv-tests"
+		},
+		{
+			"path": "../../criscv"
 		}
 	],
 	"settings": {

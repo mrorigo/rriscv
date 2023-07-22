@@ -428,10 +428,10 @@ impl Instruction<Itype> {
                 let se_imm12 = (args.imm12 as u64).sign_extend(64 - 12) as i64;
                 let rs1v = core.read_register(args.rs1);
                 let addr = (rs1v as i64 + se_imm12) as u64;
-                // instruction_trace!(println!(
-                //     "LD: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
-                //     rs1v, se_imm12, addr
-                // ));
+                instruction_trace!(println!(
+                    "LD: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
+                    rs1v, se_imm12, addr
+                ));
                 Stage::MEMORY(crate::pipeline::MemoryAccess::READ64(addr, args.rd, false))
             },
         }
@@ -492,7 +492,7 @@ impl Instruction<Itype> {
         Instruction {
             mnemonic: "EBREAK",
             args: Some(*args),
-            funct: |_core, _args| Stage::ENTER_TRAP(crate::cpu::TrapCause::Breakpoint),
+            funct: |_core, _args| Stage::TRAP(crate::cpu::TrapCause::Breakpoint),
         }
     }
 

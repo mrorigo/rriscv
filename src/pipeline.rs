@@ -2,7 +2,7 @@ use elfloader::VAddr;
 use quark::Signs;
 
 use crate::{
-    cpu::{CSRRegister, Core, PrivMode, Register, RegisterValue, TrapCause, Xlen},
+    cpu::{CSRRegister, Core, MipMask, PrivMode, Register, RegisterValue, TrapCause, Xlen},
     instructions::{
         decoder::{DecodedInstruction, InstructionDecoder},
         InstructionExcecutor, InstructionSelector,
@@ -57,13 +57,13 @@ pub struct WritebackStage {
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum Stage {
-    ENTER_TRAP(TrapCause),
-    EXIT_TRAP,
+    TRAP(TrapCause),
     FETCH,
     DECODE(RawInstruction),
     EXECUTE(DecodedInstruction),       // May be skipped (by eg NOP)
     MEMORY(MemoryAccess),              // May be skipped
     WRITEBACK(Option<WritebackStage>), // This stage is ALWAYS executed
+    IRQ,
 }
 
 pub trait CacheableInstruction {}
@@ -84,8 +84,8 @@ pub trait PipelineStages {
 
     //    fn memory(&mut self, memory_access: &MemoryAccess) -> Stage;
     fn writeback(&mut self, writeback: Option<WritebackStage>) -> Stage;
-    fn enter_trap(&mut self, cause: TrapCause) -> Stage;
-    fn exit_trap(&mut self) -> Stage;
+    fn trap(&mut self, cause: TrapCause) -> Stage;
+    //fn exit_trap(&mut self) -> Stage;
 }
 
 impl PipelineStages for Core {
@@ -93,10 +93,10 @@ impl PipelineStages for Core {
         let word = mmu.fetch(self.pc());
 
         let instruction;
-        if word.is_some() {
+        if word.is_ok() {
             instruction = word.unwrap()
         } else {
-            return Stage::ENTER_TRAP(TrapCause::InstructionAccessFault);
+            return Stage::TRAP(TrapCause::InstructionAccessFault);
         }
         // println!("f: pc={:#x?}", self.pc());
         // Determine if instruction is compressed
@@ -163,7 +163,7 @@ impl PipelineStages for Core {
             MemoryAccess::READ8(offset, register, sign_extend) => {
                 let value = mmu.read8(offset);
                 if value.is_err() {
-                    return Stage::ENTER_TRAP(value.err().unwrap());
+                    return Stage::TRAP(value.err().unwrap());
                 }
                 // pipeline_trace!(println!("m:    READ8 @ {:#x?}: {:#x?}", offset, value));
                 let value = value.unwrap();
@@ -207,13 +207,14 @@ impl PipelineStages for Core {
             }
             MemoryAccess::READ64(offset, register, sign_extend) => {
                 let l = match mmu.read_32(offset) {
-                    None => return Stage::ENTER_TRAP(TrapCause::LoadAccessFault(offset)),
-                    Some(val) => val,
+                    Err(cause) => return Stage::TRAP(cause),
+                    Ok(val) => val,
                 };
                 let h = match mmu.read_32(offset + 4) {
-                    None => return Stage::ENTER_TRAP(TrapCause::LoadAccessFault(offset + 4)),
-                    Some(val) => val,
+                    Err(cause) => return Stage::TRAP(cause),
+                    Ok(val) => val,
                 };
+
                 let comp = ((h as u64) << 32) | l as u64;
                 let value = match sign_extend {
                     true => comp.sign_extend(64 - 32),
@@ -287,62 +288,177 @@ impl PipelineStages for Core {
             _ => {}
         }
 
-        // Update the instret CSR based on what PrivMode we are in
+        self.update_instret();
 
-        let (instretcsr, instrethcsr) = match self.pmode() {
-            PrivMode::Machine => (CSRRegister::minstret, CSRRegister::minstreth),
-            PrivMode::Supervisor => (CSRRegister::instret, CSRRegister::instreth),
-            PrivMode::User => (CSRRegister::instret, CSRRegister::instreth),
-        };
-        let instret = self.read_csr(instretcsr);
-        if instret.wrapping_add(1) < instret {
-            self.write_csr(instrethcsr, self.read_csr(instrethcsr).wrapping_add(1));
-        }
-        self.write_csr(instretcsr, instret.wrapping_add(1));
-
-        // Update clint
-
-        Stage::FETCH
+        Stage::IRQ
     }
 
-    fn enter_trap(&mut self, cause: TrapCause) -> Stage {
-        self.debug_breakpoint(cause);
-        panic!("ENTER_TRAP {:#x?}", cause);
-        let causereg = match self.pmode() {
+    fn trap(&mut self, cause: TrapCause) -> Stage {
+        let csr_cause = self.get_mcause(self.xlen, cause);
+        let mip_mask = match cause {
+            TrapCause::SupervisorExternalIrq => Some(MipMask::SEIP),
+            TrapCause::SupervisorTimerIrq => Some(MipMask::STIP),
+            TrapCause::MachineExternalIrq => Some(MipMask::MEIP),
+            TrapCause::MachineTimerIrq => Some(MipMask::MTIP),
+            _ => panic!(),
+        };
+        let is_interrupt = mip_mask.is_some();
+
+        let mdeleg = match is_interrupt {
+            true => self.read_csr(CSRRegister::mideleg),
+            false => self.read_csr(CSRRegister::medeleg),
+        };
+
+        let sdeleg = match is_interrupt {
+            true => self.read_csr(CSRRegister::sideleg),
+            false => self.read_csr(CSRRegister::sedeleg),
+        };
+
+        // @TODO: We might need to change privmode!
+        let bit = csr_cause & 0xffff;
+
+        let new_privilege_mode = match ((mdeleg >> bit) & 1) == 0 {
+            true => PrivMode::Machine,
+            false => match ((sdeleg >> bit) & 1) == 0 {
+                true => PrivMode::Supervisor,
+                false => PrivMode::User,
+            },
+        };
+
+        let current_status = match self.pmode() {
+            PrivMode::Machine => self.read_csr(CSRRegister::mstatus),
+            PrivMode::Supervisor => self.read_csr(CSRRegister::sstatus),
+            PrivMode::User => self.read_csr(CSRRegister::ustatus),
+            PrivMode::Reserved => panic!(),
+        };
+
+        // Mask interrupts
+        if is_interrupt {
+            let ie = match new_privilege_mode {
+                PrivMode::Machine => self.read_csr(CSRRegister::mie),
+                PrivMode::Supervisor => self.read_csr(CSRRegister::sie),
+                PrivMode::User => self.read_csr(CSRRegister::uie),
+                PrivMode::Reserved => panic!(),
+            };
+
+            let current_mie = (current_status >> 3) & 1;
+            let current_sie = (current_status >> 1) & 1;
+            let current_uie = current_status & 1;
+
+            println!(
+                "IRQ!, ie: {:#x}  sie: {:#x?}",
+                ie,
+                (self.read_csr(CSRRegister::sie) >> 1) & 1
+            );
+
+            // Unmask IRQ from mip
+            self.write_csr(
+                CSRRegister::mip,
+                self.read_csr(CSRRegister::mip) & !(mip_mask.unwrap() as u64),
+            );
+
+            if new_privilege_mode < self.pmode() {
+                return Stage::FETCH;
+            } else if self.pmode() == new_privilege_mode {
+                match self.pmode() {
+                    PrivMode::Machine if current_mie == 0 => return Stage::FETCH,
+                    PrivMode::Supervisor if current_sie == 0 => {
+                        return Stage::FETCH;
+                    }
+                    PrivMode::User if current_uie == 0 => return Stage::FETCH,
+                    _ => {} // Non-masked
+                }
+            }
+            println!("IRQ NOT masked out!");
+
+            let msie = (ie >> 3) & 1;
+            let ssie = (ie >> 1) & 1;
+            let usie = ie & 1;
+
+            let mtie = (ie >> 7) & 1;
+            let stie = (ie >> 5) & 1;
+            let utie = (ie >> 4) & 1;
+
+            let meie = (ie >> 11) & 1;
+            let seie = (ie >> 9) & 1;
+            let ueie = (ie >> 8) & 1;
+
+            match cause {
+                TrapCause::UserSoftwareIrq if usie == 0 => return Stage::FETCH,
+                TrapCause::SupervisorSoftIrq if ssie == 0 => return Stage::FETCH,
+                TrapCause::MachineSoftIrq if msie == 0 => return Stage::FETCH,
+                TrapCause::UserTimerIrq if utie == 0 => return Stage::FETCH,
+                TrapCause::SupervisorTimerIrq if stie == 0 => return Stage::FETCH,
+                TrapCause::MachineTimerIrq if mtie == 0 => return Stage::FETCH,
+                TrapCause::UserExternalIrq if ueie == 0 => return Stage::FETCH,
+                TrapCause::SupervisorExternalIrq if seie == 0 => return Stage::FETCH,
+                TrapCause::MachineExternalIrq if meie == 0 => return Stage::FETCH,
+                _ => {} // Not masked!
+            }
+        }
+
+        let old_privilege_mode = self.pmode();
+        // Masking passed, execute trap
+        self.set_pmode(new_privilege_mode);
+
+        let epc_address = match new_privilege_mode {
+            PrivMode::Machine => CSRRegister::mepc,
+            PrivMode::Supervisor => CSRRegister::sepc,
+            PrivMode::User => CSRRegister::uepc,
+            _ => panic!(),
+        };
+
+        let cause_reg = match self.pmode() {
             PrivMode::Machine => CSRRegister::mcause,
             PrivMode::User => CSRRegister::mcause,
             PrivMode::Supervisor => CSRRegister::scause,
+            _ => panic!(),
         };
-        todo!();
 
-        // match cause as u16 & 0x100 {
-        //     0x100 => {
-        //         // interrupt
-        //         self.write_csr(causereg, cause as u8 as u64);
-        //         self.write_csr(CSRRegister::mtval, 0);
-        //         self.set_pc(self.pc() + 4);
-        //     }
-        //     _ => {
-        //         self.write_csr(causereg, (cause as u8 - 1) as u64);
-        //         // @TODO: mtval should be set to writeback-value if LoadAccessFault
-        //         self.write_csr(CSRRegister::mtval, self.pc());
-        //     }
-        // }
-        self.write_csr(CSRRegister::mepc, self.pc());
+        let tval_reg = match self.pmode() {
+            PrivMode::Machine => CSRRegister::mtval,
+            PrivMode::User => CSRRegister::stval,
+            PrivMode::Supervisor => CSRRegister::utval,
+            _ => panic!(),
+        };
 
-        // TODO: Handle WFI
-        self.write_csr(
-            CSRRegister::mstatus,
-            (self.read_csr(CSRRegister::mstatus) & 0x08) << 4,
-        );
+        let tvec_reg = match self.pmode() {
+            PrivMode::Machine => CSRRegister::mtvec,
+            PrivMode::User => CSRRegister::stvec,
+            PrivMode::Supervisor => CSRRegister::utvec,
+            _ => panic!(),
+        };
 
-        self.set_pc(self.read_csr(CSRRegister::mtvec) - 4);
+        self.write_csr(epc_address, self.pc());
+        self.write_csr(cause_reg, csr_cause);
+        self.write_csr(tval_reg, self.pc()); // @TODO: Not always correct (could be -4 for IllegalInstruction etc?)
+        let tvec_val = self.read_csr(tvec_reg);
+        self.set_pc(tvec_val);
 
-        panic!("TRAP");
-        Stage::EXIT_TRAP
-    }
+        // Add 4 * cause if tvec has vector type address
+        if (tvec_val & 0x3) != 0 {
+            self.set_pc((tvec_val & !0x3) + 4 * (csr_cause & 0xffff));
+        }
 
-    fn exit_trap(&mut self) -> Stage {
+        match self.pmode() {
+            PrivMode::Machine => {
+                let status = self.read_csr(CSRRegister::mstatus);
+                let mie = (status >> 3) & 1;
+                let new_status =
+                    (status & !0x1888) | (mie << 7) | (u64::from(old_privilege_mode) << 11);
+                self.write_csr(CSRRegister::mstatus, new_status);
+            }
+            PrivMode::Supervisor => {
+                let status = self.read_csr(CSRRegister::sstatus);
+                let sie = (status >> 1) & 1;
+                let new_status =
+                    (status & !0x122) | (sie << 5) | ((u64::from(old_privilege_mode) & 1) << 8);
+                self.write_csr(CSRRegister::mstatus, new_status);
+            }
+            _ => panic!(),
+        }
+
+        //panic!("TRAP HANDLED!");
         Stage::FETCH
     }
 }

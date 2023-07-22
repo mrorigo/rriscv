@@ -20,11 +20,6 @@ pub struct CLINT {
     ram: RAM,
 }
 
-pub struct PLIC {
-    range: MemoryRange,
-    ram: RAM,
-}
-
 pub struct PhysicalMemory {
     pub range: MemoryRange,
     ram: RAM,
@@ -72,13 +67,6 @@ impl CLINT {
     }
 }
 
-impl PLIC {
-    pub fn create(range: MemoryRange) -> PLIC {
-        let ram = RAM::create(range.start, (range.end - range.start).try_into().unwrap());
-        PLIC { range, ram }
-    }
-}
-
 pub trait VirtualDevice {
     fn name(&self) -> &str;
     fn includes(&self, addr: VAddr) -> bool;
@@ -96,7 +84,7 @@ impl MemoryOperations<PhysicalMemory, u8> for PhysicalMemory {
         self.ram.write8(addr, value)
     }
 
-    fn read32(&mut self, addr: VAddr) -> Option<u32> {
+    fn read32(&mut self, addr: VAddr) -> Result<u32, TrapCause> {
         self.ram.read32(addr)
     }
 
@@ -104,7 +92,7 @@ impl MemoryOperations<PhysicalMemory, u8> for PhysicalMemory {
         self.ram.write32(addr, value)
     }
 
-    fn read64(&mut self, addr: VAddr) -> Option<u64> {
+    fn read64(&mut self, addr: VAddr) -> Result<u64, TrapCause> {
         self.ram.read64(addr)
     }
 
@@ -138,56 +126,6 @@ impl VirtualDevice for PhysicalMemory {
     }
 }
 
-impl VirtualDevice for PLIC {
-    fn includes(&self, addr: VAddr) -> bool {
-        self.range.includes(addr)
-    }
-
-    fn name(&self) -> &str {
-        self.range.name
-    }
-
-    fn write(&mut self, addr: VAddr, value: u8) -> Option<TrapCause> {
-        self.ram.write8(addr, value)
-    }
-
-    fn read(&mut self, addr: VAddr) -> Result<u8, TrapCause> {
-        Ok(self.ram.read8(addr).unwrap())
-    }
-}
-
-impl MemoryOperations<PLIC, u8> for PLIC {
-    fn read8(&mut self, addr: VAddr) -> Result<u8, TrapCause> {
-        self.ram.read8(addr)
-    }
-
-    fn write8(&mut self, addr: VAddr, value: u8) -> Option<TrapCause> {
-        self.ram.write8(addr, value)
-    }
-
-    fn read16(&mut self, addr: VAddr) -> Option<u16> {
-        self.ram.read16(addr)
-    }
-
-    fn write16(&mut self, addr: VAddr, value: u16) -> Option<TrapCause> {
-        self.ram.write16(addr, value)
-    }
-
-    fn read32(&mut self, addr: VAddr) -> Option<u32> {
-        self.ram.read32(addr)
-    }
-    fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause> {
-        self.ram.write32(addr, value)
-    }
-
-    fn read64(&mut self, addr: VAddr) -> Option<u64> {
-        self.ram.read64(addr)
-    }
-    fn write64(&mut self, addr: VAddr, value: u64) -> Option<TrapCause> {
-        self.ram.write64(addr, value)
-    }
-}
-
 impl MemoryOperations<CLINT, u8> for CLINT {
     fn read8(&mut self, addr: VAddr) -> Result<u8, TrapCause> {
         self.ram.read8(addr)
@@ -197,28 +135,12 @@ impl MemoryOperations<CLINT, u8> for CLINT {
         self.ram.write8(addr, value)
     }
 
-    fn read32(&mut self, addr: VAddr) -> Option<u32> {
+    fn read32(&mut self, addr: VAddr) -> Result<u32, TrapCause> {
         self.ram.read32(addr)
     }
 
     fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause> {
         self.ram.write32(addr, value)
-    }
-
-    fn read64(&mut self, addr: VAddr) -> Option<u64> {
-        todo!()
-    }
-
-    fn write64(&mut self, addr: VAddr, value: u64) -> Option<TrapCause> {
-        todo!()
-    }
-
-    fn read16(&mut self, addr: VAddr) -> Option<u16> {
-        todo!()
-    }
-
-    fn write16(&mut self, addr: VAddr, value: u16) -> Option<TrapCause> {
-        todo!()
     }
 }
 

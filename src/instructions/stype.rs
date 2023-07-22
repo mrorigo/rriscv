@@ -57,6 +57,12 @@ impl Instruction<Stype> {
 
                 // The effective byte address is obtained by adding register rs1 to the sign-extended 12-bit offset
                 let addr = rs1v.wrapping_add((args.imm12 as u64).sign_extend(64 - 12)) as VAddr;
+
+                instruction_trace!(println!(
+                    "SD: rs1v={:#x?} rs2v={:#x?} addr={:#x?} pc={:#x?}",
+                    rs1v, rs2v, addr, core.prev_pc
+                ));
+
                 Stage::MEMORY(MemoryAccess::WRITE64(addr, rs2v))
             },
         }

@@ -9,5 +9,6 @@ pub mod memory;
 pub mod mmio;
 pub mod mmu;
 pub mod pipeline;
+pub mod plic;
 pub mod uart;
 pub mod virtio;

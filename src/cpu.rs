@@ -14,35 +14,71 @@ type CSRRegisters = [RegisterValue; 4096];
 
 macro_rules! cpu_trace {
     ($instr:expr) => {
-        // print!("C:");
-        // $instr;
+        print!("C:");
+        $instr;
     };
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u16)]
 pub enum TrapCause {
-    SupervisorSoftlIrq = 0x101,
-    MachineSoftlIrq = 0x103,
-    SupervisorTimerlIrq = 0x105,
-    MachineTimerlIrq = 0x107,
-    SupervisorExternallIrq = 0x109,
+    UserSoftwareIrq = 0x100,
+    SupervisorSoftIrq = 0x101,
+    MachineSoftIrq = 0x103,
+    UserTimerIrq = 0x104,
+    SupervisorTimerIrq = 0x105,
+    MachineTimerIrq = 0x107,
+    UserExternalIrq = 0x108,
+    SupervisorExternalIrq = 0x109,
     MachineExternalIrq = 0x10B,
 
-    InstructionMisaligned = 0x00,
-    InstructionAccessFault = 0x01,
-    IllegalInstruction = 0x02,
-    Breakpoint = 0x03,
-    LoadAddressMisaligned = 0x04,
-    LoadAccessFault(VAddr) = 0x05,
-
-    EnvCallFromUmode = 0x08,
-    EnvCallFromSmode = 0x09,
-    EnvCallFromMmode = 0x0B,
-
-    InstructionPageFault = 0x0C,
-    LoadPageFault = 0x0D,
+    InstructionAddressMisaligned = 0,
+    InstructionAccessFault = 1,
+    IllegalInstruction = 2,
+    Breakpoint = 3,
+    LoadAddressMisaligned = 4,
+    LoadAccessFault(VAddr) = 5,
+    StoreAddressMisaligned = 6,
+    StoreAccessFault = 7,
+    EnvCallFromUMode = 8,
+    EnvCallFromSMode = 9,
+    EnvCallFromMMode = 11,
+    InstructionPageFault = 12,
+    LoadPageFault = 13,
+    StorePageFault = 15,
 }
+
+impl From<TrapCause> for u16 {
+    fn from(value: TrapCause) -> Self {
+        match value {
+            TrapCause::InstructionAddressMisaligned => 0,
+            TrapCause::InstructionAccessFault => 1,
+            TrapCause::IllegalInstruction => 2,
+            TrapCause::Breakpoint => 3,
+            TrapCause::LoadAddressMisaligned => 4,
+            TrapCause::LoadAccessFault(_) => 5,
+            TrapCause::StoreAddressMisaligned => 6,
+            TrapCause::StoreAccessFault => 7,
+            TrapCause::EnvCallFromUMode => 8,
+            TrapCause::EnvCallFromSMode => 9,
+            TrapCause::EnvCallFromMMode => 11,
+            TrapCause::InstructionPageFault => 12,
+            TrapCause::LoadPageFault => 13,
+            TrapCause::StorePageFault => 15,
+            TrapCause::UserSoftwareIrq => 0x100,
+            TrapCause::SupervisorSoftIrq => 0x101,
+            TrapCause::MachineSoftIrq => 0x103,
+            TrapCause::UserTimerIrq => 0x104,
+            TrapCause::SupervisorTimerIrq => 0x105,
+            TrapCause::MachineTimerIrq => 0x107,
+            TrapCause::UserExternalIrq => 0x108,
+            TrapCause::SupervisorExternalIrq => 0x109,
+            TrapCause::MachineExternalIrq => 0x10B,
+        }
+    }
+}
+
+impl TrapCause {}
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
@@ -52,16 +88,28 @@ pub enum Xlen {
     //Bits128 = 128,  // nor any for 128-bit
 }
 
-#[derive(Clone, Copy, PartialEq, Debug, FromPrimitive)]
+#[derive(Clone, Copy, PartialEq, Debug, FromPrimitive, PartialOrd)]
 #[repr(u8)]
 pub enum PrivMode {
     User = 0,
     Supervisor = 1,
+    Reserved = 2,
     Machine = 3,
 }
 
+impl From<PrivMode> for u64 {
+    fn from(value: PrivMode) -> Self {
+        match value {
+            PrivMode::User => 0,
+            PrivMode::Supervisor => 1,
+            PrivMode::Reserved => 2,
+            PrivMode::Machine => 3,
+        }
+    }
+}
+
 #[allow(non_camel_case_types)]
-#[derive(Debug, Copy, Clone, FromPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, FromPrimitive)]
 #[repr(u16)]
 pub enum CSRRegister {
     ustatus = 0,
@@ -144,6 +192,7 @@ pub struct Core {
     csrs: CSRRegisters,
     pmode: PrivMode,
     pc: u64,
+    wfi: bool,
     pub prev_pc: u64,
     pub stage: Stage,
     pub cycles: u64,
@@ -166,6 +215,7 @@ impl Core {
             pc: 0,
             prev_pc: 0,
             cycles: 0,
+            wfi: false,
             stage: Stage::FETCH,
             symbols: HashMap::new(),
             symboltrace: VecDeque::<(VAddr, String)>::new(),
@@ -319,6 +369,7 @@ impl Core {
     }
 
     pub fn write_csr(&mut self, reg: CSRRegister, value: RegisterValue) {
+        let old = self.csrs[reg as usize];
         match reg {
             CSRRegister::fflags => {
                 self.csrs[CSRRegister::fcsr as usize] &= !0x1f;
@@ -333,6 +384,7 @@ impl Core {
                 self.csrs[CSRRegister::mstatus as usize] |= value & 0x80000003000de162;
             }
             CSRRegister::sie => {
+                println!("csr_WRITE sie: {:#x?}", value);
                 self.csrs[CSRRegister::mie as usize] &= !0x222;
                 self.csrs[CSRRegister::mie as usize] |= value & 0x222;
             }
@@ -343,12 +395,25 @@ impl Core {
             CSRRegister::mideleg => {
                 self.csrs[reg as usize] = value & 0x666; // from qemu
             }
+            CSRRegister::mstatus => {
+                self.csrs[CSRRegister::mstatus as usize] &= !0x80000003000de162;
+                self.csrs[CSRRegister::mstatus as usize] |= value & 0x80000003000de162;
+            }
             CSRRegister::time => todo!(),
 
             _ => {
                 self.csrs[reg as usize] = value;
             }
         }
+        if reg == CSRRegister::mip {
+            if self.csrs[reg as usize] != old {
+                println!(
+                    "-> {:?} csr set: {:#x?}  ({:#x?})",
+                    reg, self.csrs[reg as usize], value
+                );
+            }
+        }
+
         //cpu_trace!(println!("write_csr {:#x?} = {:#x?}", reg, value));
     }
 
@@ -378,16 +443,138 @@ impl Core {
     pub fn cycle(&mut self, mmu: &mut MMU) {
         //cpu_trace!(println!("stage: {:?}", self.stage));
         self.stage = match self.stage {
-            Stage::ENTER_TRAP(cause) => self.enter_trap(cause),
-            Stage::EXIT_TRAP => self.exit_trap(),
+            Stage::TRAP(cause) => self.trap(cause),
             Stage::FETCH => self.fetch(mmu),
             Stage::DECODE(instruction) => self.decode(&instruction),
             Stage::EXECUTE(decoded) => self.execute(&decoded),
             Stage::MEMORY(memory_access) => self.memory(mmu, &memory_access),
             Stage::WRITEBACK(writeback) => self.writeback(writeback),
+            Stage::IRQ => match self.handle_interrupts() {
+                Some(cause) => Stage::TRAP(cause),
+                _ => Stage::FETCH,
+            },
         };
         mmu.update_privilege_mode(self.pmode);
         mmu.update_satp(self.read_csr(CSRRegister::satp), self.xlen);
         mmu.update_mstatus(self.read_csr(CSRRegister::mstatus));
     }
+
+    //
+    fn handle_interrupts(&mut self) -> Option<TrapCause> {
+        let mie = self.read_csr(CSRRegister::mie);
+        let mip = self.read_csr(CSRRegister::mip);
+        if mip == 0 {
+            return None;
+        }
+        let minterrupt = mip & mie;
+        if MipMask::has_seip_set(minterrupt) {
+            return Some(TrapCause::SupervisorExternalIrq);
+        } else if MipMask::has_meip_set(minterrupt) {
+            return Some(TrapCause::MachineExternalIrq);
+        } else if MipMask::has_msip_set(minterrupt) {
+            return Some(TrapCause::MachineSoftIrq);
+        } else if MipMask::has_mtip_set(minterrupt) {
+            return Some(TrapCause::MachineTimerIrq);
+        } else if MipMask::has_ssip_set(minterrupt) {
+            return Some(TrapCause::SupervisorSoftIrq);
+        } else if MipMask::has_stip_set(minterrupt) {
+            return Some(TrapCause::SupervisorTimerIrq);
+        }
+
+        // self.write_csr(
+        //     CSRRegister::mip,
+        //     self.read_csr(CSRRegister::mip) & !MIP_SEIP,
+        // );
+        // self.wfi = false;
+        // return;
+        None
+    }
+
+    // Update the instret CSR based on what PrivMode we are in
+    pub fn update_instret(&mut self) {
+        let (instretcsr, instrethcsr) = match self.pmode() {
+            PrivMode::Machine => (CSRRegister::minstret, CSRRegister::minstreth),
+            PrivMode::Supervisor => (CSRRegister::instret, CSRRegister::instreth),
+            PrivMode::User => (CSRRegister::instret, CSRRegister::instreth),
+            _ => panic!("Unknown privilege mode. We should not be here."),
+        };
+
+        let instret = self.read_csr(instretcsr);
+        if instret.wrapping_add(1) < instret {
+            self.write_csr(instrethcsr, self.read_csr(instrethcsr).wrapping_add(1));
+        }
+        self.write_csr(instretcsr, instret.wrapping_add(1));
+    }
+
+    /// Map TrapCause to a `mcause` CSR register value
+    pub fn get_mcause(&self, xlen: Xlen, value: TrapCause) -> u64 {
+        let interrupt_bit = match xlen {
+            Xlen::Bits32 => 0x80000000 as u64,
+            Xlen::Bits64 => 0x8000000000000000 as u64,
+        };
+        println!("get_mcause");
+        //println!("val: {:#x?}", val);
+        match value {
+            TrapCause::InstructionAddressMisaligned
+            | TrapCause::InstructionAccessFault
+            | TrapCause::IllegalInstruction
+            | TrapCause::Breakpoint
+            | TrapCause::LoadAddressMisaligned
+            | TrapCause::LoadAccessFault(_)
+            | TrapCause::StoreAddressMisaligned
+            | TrapCause::StoreAccessFault
+            | TrapCause::EnvCallFromUMode
+            | TrapCause::EnvCallFromSMode
+            | TrapCause::EnvCallFromMMode
+            | TrapCause::InstructionPageFault
+            | TrapCause::LoadPageFault
+            | TrapCause::StorePageFault => u16::from(value) as u64,
+
+            TrapCause::UserSoftwareIrq
+            | TrapCause::SupervisorSoftIrq
+            | TrapCause::MachineSoftIrq
+            | TrapCause::UserTimerIrq
+            | TrapCause::SupervisorTimerIrq
+            | TrapCause::MachineTimerIrq
+            | TrapCause::UserExternalIrq
+            | TrapCause::SupervisorExternalIrq
+            | TrapCause::MachineExternalIrq => (u16::from(value) - 0x100) as u64 + interrupt_bit,
+        }
+    }
+}
+
+// #[derive(Copy, Clone)]
+// #[repr(u16)]
+// Masks for the `mip` CSR register
+#[non_exhaustive]
+pub struct MipMask {}
+impl MipMask {
+    pub const SSIP: u16 = 0x002;
+    pub const MSIP: u16 = 0x008;
+    pub const STIP: u16 = 0x020;
+    pub const MTIP: u16 = 0x080;
+    pub const SEIP: u16 = 0x200;
+    pub const MEIP: u16 = 0x800;
+}
+
+impl From<MipMask> for u64 {
+    fn from(value: MipMask) -> Self {
+        value.into()
+    }
+}
+
+macro_rules! mip_bit_check_impl {
+    ($name:ident,$mask:expr) => {
+        pub fn $name(value: u64) -> bool {
+            (value as u16 & $mask as u16) != 0
+        }
+    };
+}
+impl MipMask {
+    mip_bit_check_impl!(has_msip_set, MipMask::MSIP);
+    mip_bit_check_impl!(has_stip_set, MipMask::STIP);
+    mip_bit_check_impl!(has_ssip_set, MipMask::SSIP);
+    mip_bit_check_impl!(has_mtip_set, MipMask::MTIP);
+    mip_bit_check_impl!(has_seip_set, MipMask::SEIP);
+    mip_bit_check_impl!(has_meip_set, MipMask::MEIP);
 }

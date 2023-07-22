@@ -4,7 +4,8 @@ use include_bytes_aligned::include_bytes_aligned;
 use crate::{
     cpu::{PrivMode, RegisterValue, TrapCause, Xlen},
     memory::{MemoryOperations, RAMOperations},
-    mmio::{PhysicalMemory, VirtualDevice, CLINT, PLIC},
+    mmio::{PhysicalMemory, VirtualDevice, CLINT},
+    plic::PLIC,
     uart::UART,
     virtio::VIRTIO,
 };
@@ -65,7 +66,12 @@ pub struct MMU {
 impl MemoryOperations<MMU, u8> for MMU {
     // @TODO: Optimize this?
     fn read8(&mut self, addr: VAddr) -> Result<u8, TrapCause> {
-        let addr = self.translate_address(&addr, MemoryAccessType::READ);
+        let resolved = self.translate_address(&addr, MemoryAccessType::READ);
+        let addr = match resolved {
+            None => return Err(TrapCause::LoadAccessFault(addr)),
+            Some(val) => val,
+        };
+
         if self.memory.includes(addr) {
             self.memory.read8(addr)
         } else if self.virtio.includes(addr) {
@@ -84,7 +90,11 @@ impl MemoryOperations<MMU, u8> for MMU {
 
     // @TODO: Optimize this?
     fn write8(&mut self, addr: VAddr, value: u8) -> Option<TrapCause> {
-        let addr = self.translate_address(&addr, MemoryAccessType::WRITE);
+        let resolved = self.translate_address(&addr, MemoryAccessType::WRITE);
+        let addr = match resolved {
+            None => return Some(TrapCause::StoreAccessFault),
+            Some(val) => val,
+        };
         // for i in 0..self.protected.len() {
         //     if self.protected[i].includes(addr) {
         //         panic!();
@@ -106,10 +116,14 @@ impl MemoryOperations<MMU, u8> for MMU {
         }
     }
 
-    fn read32(&mut self, addr: VAddr) -> Option<u32> {
-        let addr = self.translate_address(&addr, MemoryAccessType::READ);
+    fn read32(&mut self, addr: VAddr) -> Result<u32, TrapCause> {
+        let resolved = self.translate_address(&addr, MemoryAccessType::READ);
+        let addr = match resolved {
+            None => return Err(TrapCause::StoreAccessFault),
+            Some(val) => val,
+        };
 
-        if self.memory.includes(addr) {
+        let value = if self.memory.includes(addr) {
             self.memory.read32(addr)
         } else if self.virtio.includes(addr) {
             self.virtio.read32(addr)
@@ -118,16 +132,21 @@ impl MemoryOperations<MMU, u8> for MMU {
         } else if self.plic.includes(addr) {
             self.plic.read32(addr)
         } else {
-            panic!(
-                "{:#x?} is not mapped to memory: {:#x?} - {:#x?}",
-                addr, self.memory.range.start, self.memory.range.end
-            );
-            None
-        }
+            // panic!(
+            //     "{:#x?} is not mapped to memory: {:#x?} - {:#x?}",
+            //     addr, self.memory.range.start, self.memory.range.end
+            // );
+            return Err(TrapCause::StoreAccessFault);
+        };
+        Ok(value.unwrap())
     }
 
     fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause> {
-        let addr = self.translate_address(&addr, MemoryAccessType::WRITE);
+        let resolved = self.translate_address(&addr, MemoryAccessType::WRITE);
+        let addr = match resolved {
+            None => return Some(TrapCause::StoreAccessFault),
+            Some(val) => val,
+        };
         if self.memory.includes(addr) {
             self.memory.write32(addr, value)
         } else if self.virtio.includes(addr) {
@@ -141,7 +160,7 @@ impl MemoryOperations<MMU, u8> for MMU {
         }
     }
 
-    fn read64(&mut self, addr: VAddr) -> Option<u64> {
+    fn read64(&mut self, addr: VAddr) -> Result<u64, TrapCause> {
         todo!()
     }
 
@@ -338,30 +357,25 @@ impl MMU {
         Some(p_address)
     }
 
-    pub fn translate_address(&mut self, va: &dyn SV39Addr, access_type: MemoryAccessType) -> PAddr {
+    pub fn translate_address(
+        &mut self,
+        va: &dyn SV39Addr,
+        access_type: MemoryAccessType,
+    ) -> Option<PAddr> {
         match self.pmode {
-            PrivMode::Machine => va.address() as PAddr,
+            PrivMode::Machine => Some(va.address() as PAddr),
             PrivMode::Supervisor | PrivMode::User => match self.addressing_mode {
-                AddressingMode::None => va.address(),
+                AddressingMode::None => Some(va.address()),
                 AddressingMode::SV32 => todo!(),
-                AddressingMode::SV39 => {
-                    let resolved = self.traverse_pagetable(
-                        va.address(),
-                        3 - 1,
-                        self.ppn,
-                        &va.get_vpns(),
-                        access_type,
-                    ); // @todo access type
-
-                    // print!(
-                    //     "translate_address {:#x?} -> {:#x?}  ppn: {:#x?}\n",
-                    //     va.address(),
-                    //     resolved,
-                    //     self.ppn
-                    // );
-                    resolved.unwrap()
-                }
+                AddressingMode::SV39 => self.traverse_pagetable(
+                    va.address(),
+                    3 - 1,
+                    self.ppn,
+                    &va.get_vpns(),
+                    access_type,
+                ),
             },
+            _ => panic!(),
         }
     }
 
@@ -380,24 +394,29 @@ impl MMU {
         return &mut self.virtio;
     }
 
-    pub fn tick(&mut self) {
+    /// Returns new `mip` register value
+    pub fn tick(&mut self, mip: RegisterValue) -> RegisterValue {
         self.uart.tick();
         self.clint.tick();
-        self.plic.tick();
         self.virtio.tick();
-        if self.virtio.is_interrupting() {
-            // Do something
-            println!("VirtIO: Interrupting!");
-        }
+        self.plic.tick(self.virtio.is_interrupting(), false, mip)
     }
 
-    pub fn fetch(&mut self, addr: VAddr) -> Option<u32> {
-        let addr = self.translate_address(&addr, MemoryAccessType::READ);
+    pub fn fetch(&mut self, addr: VAddr) -> Result<u32, TrapCause> {
+        let addr = self.translate_address(&addr, MemoryAccessType::EXECUTE);
 
-        if self.memory.includes(addr) {
-            self.memory.read32(addr)
-        } else {
-            None
+        match addr {
+            Some(addr) => {
+                if self.memory.includes(addr) {
+                    match self.memory.read32(addr) {
+                        Ok(value) => Ok(value),
+                        Err(cause) => Err(TrapCause::InstructionAccessFault),
+                    }
+                } else {
+                    Err(TrapCause::InstructionPageFault)
+                }
+            }
+            None => Err(TrapCause::InstructionPageFault),
         }
     }
 

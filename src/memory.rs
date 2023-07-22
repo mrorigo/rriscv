@@ -21,23 +21,39 @@ impl MemoryCellType for u8 {}
 
 #[allow(unused_variables)]
 pub trait MemoryOperations<T, T2: MemoryCellType> {
-    fn read8(&mut self, addr: VAddr) -> Result<T2, TrapCause>;
-    fn write8(&mut self, addr: VAddr, value: T2) -> Option<TrapCause>;
+    fn read8(&mut self, addr: VAddr) -> Result<T2, TrapCause> {
+        todo!()
+    }
+    fn write8(&mut self, addr: VAddr, value: T2) -> Option<TrapCause> {
+        todo!()
+    }
 
-    fn read64(&mut self, addr: VAddr) -> Option<u64>;
-    fn write64(&mut self, addr: VAddr, value: u64) -> Option<TrapCause>;
+    fn read64(&mut self, addr: VAddr) -> Result<u64, TrapCause> {
+        todo!()
+    }
+    fn write64(&mut self, addr: VAddr, value: u64) -> Option<TrapCause> {
+        todo!()
+    }
 
-    fn read32(&mut self, addr: VAddr) -> Option<u32>;
-    fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause>;
+    fn read32(&mut self, addr: VAddr) -> Result<u32, TrapCause> {
+        todo!()
+    }
+    fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause> {
+        todo!()
+    }
 
-    fn read16(&mut self, addr: VAddr) -> Option<u16>;
-    fn write16(&mut self, addr: VAddr, value: u16) -> Option<TrapCause>;
+    fn read16(&mut self, addr: VAddr) -> Option<u16> {
+        todo!()
+    }
+    fn write16(&mut self, addr: VAddr, value: u16) -> Option<TrapCause> {
+        todo!()
+    }
 
     //    fn add_segment(&mut self, base_address: VAddr, size: usize);
 }
 
 pub trait RAMOperations<T>: MemoryOperations<T, u8> {
-    fn read_32(&mut self, addr: VAddr) -> Option<u32> {
+    fn read_32(&mut self, addr: VAddr) -> Result<u32, TrapCause> {
         self.read32(addr)
     }
 
@@ -74,7 +90,7 @@ impl MemoryOperations<RAM, u8> for RAM {
         Ok(value)
     }
 
-    fn read32(&mut self, addr: VAddr) -> Option<u32> {
+    fn read32(&mut self, addr: VAddr) -> Result<u32, TrapCause> {
         let offs = addr - self.base_address;
 
         let mut data = 0 as u32;
@@ -87,7 +103,7 @@ impl MemoryOperations<RAM, u8> for RAM {
         // if addr <= 0x80002228 && addr > 0x80002200 {
         //     println!("r32 {:#x?} => {:#x?}", addr, data);
         // }
-        Some(data)
+        Ok(data)
     }
 
     fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause> {
@@ -128,17 +144,17 @@ impl MemoryOperations<RAM, u8> for RAM {
         Some(data)
     }
 
-    fn read64(&mut self, addr: VAddr) -> Option<u64> {
+    fn read64(&mut self, addr: VAddr) -> Result<u64, TrapCause> {
         let l = match self.read32(addr) {
-            None => return None,
-            Some(val) => val,
+            Err(cause) => return Err(cause),
+            Ok(val) => val,
         };
         let h = match self.read32(addr + 4) {
-            None => return None,
-            Some(val) => val,
+            Err(cause) => return Err(cause),
+            Ok(val) => val,
         };
         let comp = ((h as u64) << 32) | l as u64;
-        Some(comp)
+        Ok(comp)
     }
 
     fn write64(&mut self, addr: VAddr, value: u64) -> Option<TrapCause> {
