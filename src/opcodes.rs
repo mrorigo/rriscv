@@ -9,34 +9,56 @@ pub const FUNCT7_MASK: u16 = (1 << FUNCT7_SHIFT) - 1;
 pub const FUNCT3_SHIFT: u8 = 7;
 pub const FUNCT3_MASK: u8 = (1 << FUNCT3_SHIFT) - 1;
 //const FUNCT7: u16 = 1 << FUNCT7_SHIFT;
+
+/// Table 19.1: RISC-V base opcode map
 #[derive(Debug, Copy, Clone, FromPrimitive, PartialEq)]
-#[repr(u32)]
+#[repr(u8)]
 #[allow(non_camel_case_types)]
-enum MajorOpcode {
+pub enum MajorOpcode {
     AUIPC = 0b0010111,
     BRANCH = 0b1100011,
     LOAD = 0b0000011,
     JALR = 0b1100111,
     JAL = 0b1101111,
     OP = 0b0110011,
+    // AMO,
     // OP_32,
     // OP_FP,
     OP_IMM = 0b0010011,
     OP_IMM_32 = 0b0011011,
     LUI = 0b0110111,
-    //MADD,
     MISC_MEM = 0b0001111,
+    //MADD,
     //MSUB,
     STORE = 0b0100011,
     SYSTEM = 0b1110011,
 }
+
+impl MajorOpcode {
+    fn encode(&self, op: u8, funct3: u8, funct7: u8) -> OpCodes {
+        let word =
+            op as u32 | ((funct3 as u32) << FUNCT3_SHIFT) | ((funct7 as u32) << FUNCT7_SHIFT);
+        let ret: Option<OpCodes> = num::FromPrimitive::from_u32(word);
+        ret.unwrap_or(OpCodes::ILLEGAL)
+    }
+}
+
+#[derive(Debug, Copy, Clone, FromPrimitive, PartialEq)]
+#[repr(u8)]
+pub enum CompressedOpcode {
+    C0 = 0b00,
+    C1 = 0b01,
+    C2 = 0b10,
+    C3 = 0b11,
+}
+
 /// Each opcode encoded together with the funct3 and func7 bits
-/// as a 16 bit number:
+/// as a 32 bit number:
 /// Bits 0-7:  opcode
 /// Bits 8-10: funct3
-/// Bit 11:    funct7
+/// Bit 11-18: funct7
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, FromPrimitive, PartialEq)]
+#[derive(Debug, Copy, Clone, FromPrimitive, PartialEq, Eq)]
 pub enum OpCodes {
     NONE = 0,
     ILLEGAL = 1 << 31,
@@ -104,6 +126,7 @@ pub enum OpCodes {
     LWU = (MajorOpcode::LOAD as u32) | (0b110 << FUNCT3_SHIFT),
     LD = (MajorOpcode::LOAD as u32) | (0b011 << FUNCT3_SHIFT),
     SD = (MajorOpcode::STORE as u32) | (0b011 << FUNCT3_SHIFT),
+
     ADDIW = MajorOpcode::OP_IMM_32 as u32 | (0b000 << FUNCT3_SHIFT),
 
     // RV32M Standard Extension
@@ -117,9 +140,9 @@ pub enum OpCodes {
     REMU = MajorOpcode::OP as u32 | (0b111 << FUNCT3_SHIFT) | (1 << FUNCT7_SHIFT),
 
     // RV64M Standard Extension (in addition to RV32M)
-    MULW = MajorOpcode::OP_IMM_32 as u32 | (0b000 << FUNCT3_SHIFT) | (0b0000001 << FUNCT7_SHIFT),
-    DIVW = MajorOpcode::OP_IMM_32 as u32 | (0b100 << FUNCT3_SHIFT) | (0b0000001 << FUNCT7_SHIFT),
-    DIVUW = MajorOpcode::OP_IMM_32 as u32 | (0b101 << FUNCT3_SHIFT) | (0b0000001 << FUNCT7_SHIFT),
-    REMW = MajorOpcode::OP_IMM_32 as u32 | (0b110 << FUNCT3_SHIFT) | (0b0000001 << FUNCT7_SHIFT),
-    REMUW = MajorOpcode::OP_IMM_32 as u32 | (0b111 << FUNCT3_SHIFT) | (0b0000001 << FUNCT7_SHIFT),
+    MULW = MajorOpcode::OP_IMM_32 as u32 | (0b000 << FUNCT3_SHIFT) | (1 << FUNCT7_SHIFT),
+    DIVW = MajorOpcode::OP_IMM_32 as u32 | (0b100 << FUNCT3_SHIFT) | (1 << FUNCT7_SHIFT),
+    DIVUW = MajorOpcode::OP_IMM_32 as u32 | (0b101 << FUNCT3_SHIFT) | (1 << FUNCT7_SHIFT),
+    REMW = MajorOpcode::OP_IMM_32 as u32 | (0b110 << FUNCT3_SHIFT) | (1 << FUNCT7_SHIFT),
+    REMUW = MajorOpcode::OP_IMM_32 as u32 | (0b111 << FUNCT3_SHIFT) | (1 << FUNCT7_SHIFT),
 }

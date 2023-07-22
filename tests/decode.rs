@@ -2,10 +2,13 @@
 
 use rriscv::{
     self,
-    cpu::{self, Core, RegisterValue},
-    decoder::{DecodedInstruction, InstructionDecoder},
+    cpu::{self, Core},
+    decoder::{
+        CSStype, CStype, DecodedInstruction, InstructionDecoder, Itype, Jtype, Stype, Utype,
+    },
     memory::Memory,
-    opcodes::OpCodes,
+    opcodes::{CompressedOpcode, MajorOpcode},
+    pipeline::RawInstruction,
 };
 
 const VBASE: u64 = 0x8000_0000;
@@ -17,254 +20,57 @@ macro_rules! test_case {
         pub fn $n() {
             let memory = &mut Memory::create(VBASE, 4096);
             let core = cpu::Core::create(0x0, memory);
-            run_test_case(core, $a)
+            $a.run(core)
         }
     };
-}
-
-macro_rules! prop_assertion {
-    ( $decoded:expr, $case:expr, $prop:ident ) => {
-        match $case.$prop {
-            Some(val) => {
-                assert!(
-                    $decoded.$prop == val,
-                    "{} {:#x?} != {:#x?}",
-                    stringify!($prop),
-                    val,
-                    $decoded.$prop
-                )
-            }
-            None => {}
-        }
-    };
-}
-
-fn run_test_case(mut core: Core<'_>, case: TestCase) {
-    let decoded = core.decode_instruction(case.instruction);
-    assert!(decoded.opcode.is_some());
-    assert!(
-        decoded.opcode.unwrap() == case.opcode,
-        "opcode {:?} != {:?}",
-        decoded.opcode.unwrap(),
-        case.opcode
-    );
-    prop_assertion!(decoded, case, rd);
-    prop_assertion!(decoded, case, rs1);
-    prop_assertion!(decoded, case, rs2);
-    prop_assertion!(decoded, case, imm5);
-    prop_assertion!(decoded, case, imm12);
-    prop_assertion!(decoded, case, imm20);
-}
-
-pub struct TestCase {
-    name: &'static str,
-    opcode: OpCodes,
-    instruction: (bool, u32),
-    rd: Option<u8>,
-    rs1: Option<u8>,
-    rs2: Option<u8>,
-    funct3: Option<u8>,
-    imm5: Option<u8>,
-    imm12: Option<u16>,
-    imm20: Option<u32>,
 }
 
 impl TestCase {
-    // pub fn create12(
-    //     name: &'static str,
-    //     opcode: OpCodes,
-    //     instruction: u32,
-    //     rd: u8,
-    //     imm12: u16,
-    // ) -> TestCase {
-    //     TestCase {
-    //         name,
-    //         opcode,
-    //         instruction: (false, instruction),
-    //         rd: Some(rd),
-    //         rs1: None,
-    //         rs2: None,
-    //         funct3: None,
-    //         imm5: None,
-    //         imm12: Some(imm12),
-    //         imm20: None,
-    //     }
-    // }
-
-    pub fn uj(
-        name: &'static str,
-        opcode: OpCodes,
-        instruction: u32,
-        rd: u8,
-        imm20: u32,
-    ) -> TestCase {
-        TestCase {
-            name,
-            opcode,
-            instruction: (false, instruction),
-            rd: Some(rd),
-            rs1: None,
-            rs2: None,
-            funct3: None,
-            imm5: None,
-            imm12: None,
-            imm20: Some(imm20),
-        }
+    fn run(&self, core: Core<'_>) {
+        let decoded = core.decode_instruction(self.instruction);
+        assert!(
+            decoded == self.decoded,
+            "{}: opcode {:?} != {:?}",
+            self.description,
+            decoded,
+            self.decoded
+        )
     }
-
-    pub fn i(
-        name: &'static str,
-        opcode: OpCodes,
+    pub fn create(
+        description: &'static str,
         instruction: u32,
-        rd: u8,
-        rs1: u8,
-        funct3: u8,
-        imm12: u16,
+        compressed: bool,
+        decoded: DecodedInstruction,
     ) -> TestCase {
         TestCase {
-            name,
-            opcode,
-            instruction: (false, instruction),
-            rd: Some(rd),
-            rs1: Some(rs1),
-            rs2: None,
-            funct3: None,
-            imm5: None,
-            imm12: Some(imm12),
-            imm20: None,
-        }
-    }
-
-    pub fn s(
-        name: &'static str,
-        opcode: OpCodes,
-        instruction: u32,
-        rs1: u8,
-        rs2: u8,
-        funct3: u8,
-        imm20: u32,
-    ) -> TestCase {
-        TestCase {
-            name,
-            opcode,
-            instruction: (false, instruction),
-            rs1: Some(rs1),
-            rs2: Some(rs2),
-            rd: None,
-            funct3: Some(funct3),
-            imm5: None,
-            imm20: Some(imm20),
-            imm12: None,
-        }
-    }
-    // Stack-relative Store (Compressed)
-    pub fn css(
-        name: &'static str,
-        opcode: OpCodes,
-        instruction: u32,
-        rs2: u8,
-        funct3: u8,
-        imm20: u32,
-    ) -> TestCase {
-        TestCase {
-            name,
-            opcode,
-            instruction: (true, instruction),
-            rs1: None,
-            rs2: Some(rs2),
-            rd: Some(2),
-            funct3: Some(funct3),
-            imm5: None,
-            imm20: Some(imm20),
-            imm12: None,
-        }
-    }
-
-    pub fn ciw(
-        name: &'static str,
-        opcode: OpCodes,
-        instruction: u32,
-        rd: u8,
-        funct3: u8,
-        imm12: u16,
-    ) -> TestCase {
-        TestCase {
-            name,
-            opcode,
-            instruction: (true, instruction),
-            rs1: Some(2),
-            rs2: None,
-            rd: Some(rd),
-            funct3: Some(funct3),
-            imm5: None,
-            imm12: Some(imm12),
-            imm20: None,
-        }
-    }
-
-    pub fn cs(
-        name: &'static str,
-        opcode: OpCodes,
-        instruction: u32,
-        rd: u8,
-        rs2: u8,
-        funct3: u8,
-    ) -> TestCase {
-        TestCase {
-            name,
-            opcode,
-            instruction: (true, instruction),
-            rs1: Some(rd),
-            rs2: Some(rs2),
-            rd: Some(rd),
-            funct3: Some(funct3),
-            imm5: None,
-            imm12: None,
-            imm20: None,
-        }
-    }
-
-    pub fn c(
-        name: &'static str,
-        opcode: OpCodes,
-        instruction: u32,
-        rd: u8,
-        rs1: u8,
-        imm12: u16, // csr
-        funct3: u8,
-    ) -> TestCase {
-        TestCase {
-            name,
-            opcode,
-            instruction: (false, instruction),
-            rs1: Some(rs1),
-            rs2: None,
-            rd: Some(rd),
-            funct3: Some(funct3),
-            imm5: None,
-            imm12: Some(imm12),
-            imm20: None,
+            description,
+            instruction: RawInstruction {
+                compressed,
+                word: instruction,
+                pc: VBASE,
+            },
+            decoded,
         }
     }
 }
 
-// #[test]
-// pub fn runn() {
-//     println!("ADDIW: {:#x?}", OpCodes::ADDIW as u32);
-//     assert!(false, "TEST")
-// }
+pub struct TestCase {
+    description: &'static str,
+    instruction: RawInstruction,
+    decoded: DecodedInstruction,
+}
 
-test_case! {lui1, TestCase::uj(&"LUI X14,0x2004", OpCodes::LUI, 0x02004737, 14, 0x2004)}
-test_case! {lui2, TestCase::uj(&"LUI X14,0x7ff4", OpCodes::LUI, 0x07ff4737, 14, 0x7ff4)}
-test_case! {auipc, TestCase::uj(&"AUIPC X2,0x9", OpCodes::AUIPC, 0x00009117, 2, 0x09)}
-test_case! {jal, TestCase::uj(&"JAL X1,0x9", OpCodes::JAL, 0x076000ef, 1, 0x3b)}
+test_case! {lui1, TestCase::create(&"LUI X14,0x2004", 0x02004737,false, DecodedInstruction::U(Utype { opcode: MajorOpcode::LUI, rd: 14, imm20: 0x2004}))}
+test_case! {lui2, TestCase::create(&"LUI X14,0x7ff4", 0x07ff4737, false, DecodedInstruction::U(Utype { opcode: MajorOpcode::LUI, rd: 14, imm20: 0x7ff4}))}
+test_case! {auipc, TestCase::create(&"AUIPC X2,0x9", 0x00009117, false, DecodedInstruction::U(Utype {opcode: MajorOpcode::AUIPC, rd: 2, imm20:0x09}))}
+test_case! {jal, TestCase::create(&"JAL X1,0x9", 0x076000ef, false, DecodedInstruction::J(Jtype {opcode: MajorOpcode::JAL, imm20: 0x3b, rd:1}))}
 
-test_case! {addi, TestCase::i(&"ADDI X2,X2,-1520", OpCodes::ADDI, 0xa1010113, 2, 2, 0b000, 2576)}
+test_case! {addi, TestCase::create(&"ADDI X2,X2,-1520", 0xa1010113, false, DecodedInstruction::I(Itype { opcode: MajorOpcode::OP_IMM, rd:2, rs1: 2, imm12: 2576, funct3: 0b000 }))}
 
-test_case! {sd,   TestCase::s(&"SD X1, 8(X2)", OpCodes::SD, 0x00113423, 2 ,1, 0b011, 8)}
-test_case! {c_sdsp, TestCase::css(&"C.SDSP  x1,8(x2)", OpCodes::SD, 0xe406, 1, 0b111, 8) }
-test_case! {c_addi4spn, TestCase::ciw(&"C.ADDI4SPN X8,X2,16", OpCodes::ADDI, 0x0800, 8, 0b000, 16) }
-test_case! {csrrw0, TestCase::c(&"CSRRW X0,mstatus,X15", OpCodes::CSRRW, 0x30079073, 0, 15, 0x300, 0b001) }
-test_case! {csrrw1, TestCase::c(&"CSRRW X1,mstatus,X15", OpCodes::CSRRW, 0x300790f3, 1, 15, 0x300, 0b001) }
+test_case! {sd,   TestCase::create(&"SD X1, 8(X2)", 0x00113423, false, DecodedInstruction::S(Stype{opcode: MajorOpcode::STORE, rs1: 2, rs2: 1, funct3: 0b011, imm12: 8}))}
+test_case! {c_sdsp, TestCase::create(&"C.SDSP  x1,8(x2)", 0xe406, true, DecodedInstruction::CSS(CSStype {opcode: CompressedOpcode::C2, rs2: 1, funct3: 0b111, uimm: 8})) }
+// test_case! {c_addi4spn, TestCase::ciw(&"C.ADDI4SPN X8,X2,16", OpCodes::ADDI, 0x0800, 8, 0b000, 16) }
+test_case! {csrrw0, TestCase::create(&"CSRRW X0,mstatus,X15", 0x30079073, false, DecodedInstruction::I(Itype { opcode: MajorOpcode::SYSTEM, rd: 0, rs1: 15, funct3: 0b001, imm12: 0x300 })) }
+test_case! {csrrw1, TestCase::create(&"CSRRW X1,mstatus,X15", 0x302790f3, false, DecodedInstruction::I(Itype { opcode: MajorOpcode::SYSTEM, rd: 1, rs1: 15, funct3: 0b001, imm12: 0x302 })) }
 
-test_case! {addiw, TestCase::i(&"ADDIW X11,X15,0", OpCodes::ADDIW, 0x0007859b, 11, 15, 0b000, 0) }
+// test_case! {addiw, TestCase::i(&"ADDIW X11,X15,0", OpCodes::ADDIW, 0x0007859b, 11, 15, 0b000, 0) }

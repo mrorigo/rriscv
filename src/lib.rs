@@ -10,9 +10,10 @@ extern crate num_derive;
 pub mod cpu;
 pub mod decoder;
 pub mod elf;
+pub mod instruction_format;
 pub mod memory;
 pub mod opcodes;
-pub mod optypes;
+pub mod pipeline;
 
 // fn main() {
 //     use std::fs;

@@ -10,11 +10,13 @@ pub enum InstructionFormat {
     // 2.3 Immediate Encoding Variants
     B,
     J,
+}
 
-    // 2.8 Control and Status Register
-    C, // System (CSR*)
-
-    // Compressed formats (RVC)
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[repr(u8)]
+pub enum CompressedInstructionFormat {
+    Unknown = 0,
+    // Table 12.1: Compressed 16-bit RVC instruction formats.
     CR,
     CI,
     CSS,
@@ -25,39 +27,39 @@ pub enum InstructionFormat {
     CJ,
 }
 
-pub const COMPRESSED_OPTYPES: [InstructionFormat; 32] = [
-    InstructionFormat::CIW, // 0
-    InstructionFormat::CI,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::CI,      // C.LI
-    InstructionFormat::Unknown, // 10
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::CI, // C.LUI , ADDI16SP
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::CS,
-    InstructionFormat::CR,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown, // 20
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::Unknown,
-    InstructionFormat::CSS,     // C.SDSP,
-    InstructionFormat::Unknown, // 31
+pub const COMPRESSED_FORMAT_MAP: [CompressedInstructionFormat; 32] = [
+    CompressedInstructionFormat::CIW, // 0
+    CompressedInstructionFormat::CI,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::CI,      // C.LI
+    CompressedInstructionFormat::Unknown, // 10
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::CI, // C.LUI , ADDI16SP
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::CS,
+    CompressedInstructionFormat::CR,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown, // 20
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::Unknown,
+    CompressedInstructionFormat::CSS,     // C.SDSP,
+    CompressedInstructionFormat::Unknown, // 31
 ];
 // pub enum CsrInstructionType {
 //     CSRRW = 0b001,
@@ -67,11 +69,11 @@ pub const COMPRESSED_OPTYPES: [InstructionFormat; 32] = [
 //     CSRRSI = 0b110,
 //     CSRRCI = 0b111,
 // }
-pub const OPTYPES: [InstructionFormat; 128] = [
+pub const FORMAT_MAP: [InstructionFormat; 128] = [
     InstructionFormat::Unknown, /*0000000 */
     InstructionFormat::Unknown, /*0000001 */
     InstructionFormat::Unknown, /*0000010 */
-    InstructionFormat::I,       /*0000011 = LB/LH/LW */
+    InstructionFormat::I,       /*0000011 = 0x03 = LB/LH/LW */
     InstructionFormat::Unknown, /*0000100 */
     InstructionFormat::Unknown, /*0000101 */
     InstructionFormat::Unknown, /*0000110 */
@@ -183,7 +185,7 @@ pub const OPTYPES: [InstructionFormat; 128] = [
     InstructionFormat::Unknown, /*1110000 */
     InstructionFormat::Unknown, /*1110001 */
     InstructionFormat::Unknown, /*1110010 */
-    InstructionFormat::C,       /*1110011 = CSR* */
+    InstructionFormat::I,       /*1110011 = CSR* */
     InstructionFormat::Unknown, /*1110100 */
     InstructionFormat::Unknown, /*1110101 */
     InstructionFormat::Unknown, /*1110110 */

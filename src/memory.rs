@@ -23,7 +23,7 @@ pub enum MemoryAccessWidth {
 #[derive(Debug)]
 pub struct Memory {
     pub base_address: u64,
-    size: usize,
+    pub size: usize,
     data: *mut u8,
 }
 
@@ -122,8 +122,13 @@ impl MemoryOperations for Memory {
 
 impl Memory {
     pub fn create(base_address: u64, size: usize) -> impl MemoryOperations {
-        let data = Vec::<u8>::with_capacity(size).as_mut_ptr();
+        let mut data = Vec::<u8>::with_capacity(size).as_mut_ptr();
         mem::forget(data);
+        for i in 0..size {
+            unsafe {
+                data.offset(i as isize).write(0);
+            }
+        }
         Memory {
             base_address,
             size,
@@ -132,13 +137,15 @@ impl Memory {
     }
 
     pub fn dump(&self, addr: usize, count: usize) {
-        unsafe {
-            print!(
-                "{:#x?}",
-                self.data
-                    .offset((addr - self.base_address as usize) as isize)
-                    .read()
-            )
-        };
+        for i in 0..count as isize {
+            unsafe {
+                print!(
+                    "{:#x?} ",
+                    self.data
+                        .offset(i + (addr - self.base_address as usize) as isize)
+                        .read()
+                )
+            };
+        }
     }
 }
