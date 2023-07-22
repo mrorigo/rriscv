@@ -58,7 +58,7 @@ impl ElfLoader for Loader<'_> {
         for offs in (0..region.len()).step_by(1) {
             let b0 = region[offs + 0].into();
             self.memory.write_single(
-                offs + start as usize,
+                (offs as u64 + start),
                 b0,
                 crate::memory::MemoryAccessWidth::BYTE,
             );
