@@ -69,7 +69,6 @@ impl Instruction<CStype> {
                 let rs1v = core.read_register(args.rs1_rd);
                 let rs2v = core.read_register(args.rs2);
                 let value = rs1v & rs2v;
-                //                debug_trace!(println!("C.AND x{},x{}", args.rs1_rd, args.rs2));
                 Stage::writeback(args.rs1_rd, value)
             },
         }
@@ -83,7 +82,6 @@ impl Instruction<CStype> {
                 let rs1v = core.read_register(args.rs1_rd);
                 let rs2v = core.read_register(args.rs2);
                 let value = rs1v | rs2v;
-                //                debug_trace!(println!("C.OR x{},x{}", args.rs1_rd, args.rs2));
                 Stage::writeback(args.rs1_rd, value)
             },
         }

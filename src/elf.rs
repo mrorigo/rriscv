@@ -1,3 +1,5 @@
+use std::ptr;
+
 use elfloader::*;
 
 use crate::{memory::MemoryOperations, mmu::MMU};
@@ -55,37 +57,8 @@ impl ElfLoader for Loader<'_> {
             "load: base={:#x} region into = {:#x} -- {:#x}  vbase: {:#x}",
             base, start, end, self.vbase
         );
-        for offs in (0..region.len()).step_by(1) {
-            let b0 = region[offs + 0].into();
-            self.memory.write_single(
-                offs as u64 + start,
-                b0,
-                crate::memory::MemoryAccessWidth::BYTE,
-            );
-            // let b3 = region[offs + 3].into();
-            // let b2 = region[offs + 2].into();
-            // let b1 = region[offs + 1].into();
-
-            // self.memory.write_single(
-            //     offs + start as usize,
-            //     b3,
-            //     crate::memory::MemoryAccessWidth::BYTE,
-            // );
-            // self.memory.write_single(
-            //     offs + 1 + start as usize,
-            //     b2,
-            //     crate::memory::MemoryAccessWidth::BYTE,
-            // );
-            // self.memory.write_single(
-            //     offs + 2 + start as usize,
-            //     b1,
-            //     crate::memory::MemoryAccessWidth::BYTE,
-            // );
-            // self.memory.write_single(
-            //     offs + 3 + start as usize,
-            //     b0,
-            //     crate::memory::MemoryAccessWidth::BYTE,
-            // );
+        for offs in 0..region.len() {
+            self.memory.write_single(offs as u64 + start, region[offs]);
         }
         Ok(())
     }

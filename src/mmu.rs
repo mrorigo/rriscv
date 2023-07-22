@@ -4,7 +4,7 @@ use elfloader::{PAddr, VAddr};
 use include_bytes_aligned::include_bytes_aligned;
 
 use crate::{
-    memory::MemoryOperations,
+    memory::{MemoryOperations, RAMOperations},
     mmio::{PhysicalMemory, VirtualDevice, CLINT, PLIC, UART, VIRTIO},
 };
 
@@ -43,18 +43,14 @@ pub struct MMU {
     device_table: Vec<MemoryRange>,
 }
 
-impl MemoryOperations<MMU> for MMU {
-    fn read_single(
-        &self,
-        addr: VAddr,
-        memory_access_width: crate::memory::MemoryAccessWidth,
-    ) -> Option<u64> {
+impl MemoryOperations<MMU, u8> for MMU {
+    fn read_single(&self, addr: VAddr) -> Option<u8> {
         if self.memory.includes(addr) {
-            self.memory.read_single(addr, memory_access_width)
+            self.memory.read_single(addr)
         } else if self.uart.includes(addr) {
             todo!("UART I/O")
         } else if self.clint.includes(addr) {
-            self.clint.read_single(addr, memory_access_width)
+            self.clint.read_single(addr)
         } else if self.plic.includes(addr) {
             todo!("PLIC I/O")
         } else if self.virtio.includes(addr) {
@@ -64,18 +60,13 @@ impl MemoryOperations<MMU> for MMU {
         }
     }
 
-    fn write_single(
-        &mut self,
-        addr: VAddr,
-        value: u64,
-        memory_access_width: crate::memory::MemoryAccessWidth,
-    ) -> bool {
+    fn write_single(&mut self, addr: VAddr, value: u8) -> bool {
         if self.memory.includes(addr) {
-            self.memory.write_single(addr, value, memory_access_width)
+            self.memory.write_single(addr, value)
         } else if self.uart.includes(addr) {
             todo!("UART I/O")
         } else if self.clint.includes(addr) {
-            self.clint.write_single(addr, value, memory_access_width)
+            self.clint.write_single(addr, value)
         } else if self.plic.includes(addr) {
             todo!("PLIC I/O")
         } else if self.virtio.includes(addr) {
@@ -85,6 +76,8 @@ impl MemoryOperations<MMU> for MMU {
         }
     }
 }
+
+impl RAMOperations<MMU> for MMU {}
 
 impl MMU {
     pub fn create() -> MMU {

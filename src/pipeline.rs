@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use elfloader::VAddr;
 
 use crate::{
@@ -53,6 +55,10 @@ pub enum Stage {
     WRITEBACK(Option<WritebackStage>), // This stage is ALWAYS executed
 }
 
+pub trait CacheableInstruction {}
+
+//const INSTRUCTION_CACHE: HashMap<u32, Box<dyn CacheableInstruction>> = HashMap::new();
+
 impl Stage {
     pub fn writeback(register: Register, value: RegisterValue) -> Stage {
         Stage::WRITEBACK(Some(WritebackStage { register, value }))
@@ -71,10 +77,7 @@ pub trait PipelineStages {
 
 impl PipelineStages for Core<'_> {
     fn fetch(&mut self) -> Stage {
-        let instruction = self
-            .mmu
-            .read_single(self.pc, MemoryAccessWidth::WORD)
-            .unwrap() as u32;
+        let instruction = self.mmu.read_32(self.pc).unwrap();
 
         // Determine if instruction is compressed
         let instruction = match (instruction & 0x3) == 0x03 {
@@ -137,51 +140,52 @@ impl PipelineStages for Core<'_> {
         match *memory_access {
             MemoryAccess::READ8(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
                 register: register,
-                value: self
-                    .mmu
-                    .read_single(offset, MemoryAccessWidth::BYTE)
-                    .unwrap(),
+                value: self.mmu.read_single(offset).unwrap() as u64,
             })),
-            MemoryAccess::READ16(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
-                register: register,
-                value: self
-                    .mmu
-                    .read_single(offset, MemoryAccessWidth::HALFWORD)
-                    .unwrap(),
-            })),
-            MemoryAccess::READ32(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
-                register: register,
-                value: self
-                    .mmu
-                    .read_single(offset, MemoryAccessWidth::WORD)
-                    .unwrap(),
-            })),
-            MemoryAccess::READ64(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
-                register: register,
-                value: self
-                    .mmu
-                    .read_single(offset, MemoryAccessWidth::LONG)
-                    .unwrap(),
-            })),
+            MemoryAccess::READ16(offset, register) => {
+                todo!()
+                // let v = self.mmu.read_16(offset).unwrap();
+                // Stage::WRITEBACK(Some(WritebackStage {
+                //     register: register,
+                //     value: v as u64,
+                // }))
+            }
+            MemoryAccess::READ32(offset, register) => {
+                let v = self.mmu.read_32(offset).unwrap();
+                pipeline_trace!(println!("READ32 @ {:#x?}: {:#?}", offset, v));
+                Stage::WRITEBACK(Some(WritebackStage {
+                    register: register,
+                    value: v as u64,
+                }))
+            }
+            MemoryAccess::READ64(offset, register) => {
+                let l = self.mmu.read_32(offset).unwrap();
+                let h = self.mmu.read_32(offset + 4).unwrap();
+                let value = ((h as u64) << 32) | l as u64;
+                Stage::WRITEBACK(Some(WritebackStage {
+                    register: register,
+                    value,
+                }))
+            }
             MemoryAccess::WRITE8(offset, value) => {
-                self.mmu
-                    .write_single(offset, value as u64, MemoryAccessWidth::BYTE);
+                self.mmu.write_single(offset, value);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE16(offset, value) => {
-                self.mmu
-                    .write_single(offset, value as u64, MemoryAccessWidth::HALFWORD);
+                self.mmu.write_single(offset + 1, (value & 0xff) as u8);
+                self.mmu.write_single(offset, (value >> 8) as u8);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE32(offset, value) => {
-                self.mmu
-                    .write_single(offset, value as u64, MemoryAccessWidth::WORD);
+                self.mmu.write_32(offset, value);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE64(offset, value) => {
-                pipeline_trace!(println!("memory::WRITE64: {:#x?} @ {:#x?}", value, offset));
-                self.mmu
-                    .write_single(offset, value as u64, MemoryAccessWidth::LONG);
+                self.mmu.write_32(offset, value as u32);
+                self.mmu.write_32(offset + 4, (value >> 32) as u32);
+                // pipeline_trace!(println!("memory::WRITE64: {:#x?} @ {:#x?}", value, offset));
+                // self.mmu
+                //     .write_single(offset, value as u64, MemoryAccessWidth::LONG);
                 Stage::WRITEBACK(None)
             }
         }

@@ -21,26 +21,41 @@ pub struct RAM {
     data: *mut u8,
 }
 
-// #[derive(Debug)]
-// pub struct Memory {
-//     pub segments: Vec<MemorySegment>,
-// }
-
 #[allow(unused_variables)]
-pub trait MemoryOperations<T>: std::fmt::Debug {
-    fn read_single(&self, addr: VAddr, memory_access_width: MemoryAccessWidth) -> Option<u64>;
-    fn write_single(
-        &mut self,
-        addr: VAddr,
-        value: u64,
-        memory_access_width: MemoryAccessWidth,
-    ) -> bool;
+pub trait MemoryOperations<T, T2>: std::fmt::Debug {
+    fn read_single(&self, addr: VAddr) -> Option<T2>;
+    fn write_single(&mut self, addr: VAddr, value: T2) -> bool;
+
     //    fn add_segment(&mut self, base_address: VAddr, size: usize);
 }
 
-impl MemoryOperations<RAM> for RAM {
-    fn write_single(&mut self, addr: VAddr, value: u64, maw: MemoryAccessWidth) -> bool {
-        //        println!("write_single @ {:#x} base={:#x}", addr, self.base_address);
+pub trait RAMOperations<T>: MemoryOperations<T, u8> {
+    fn read_32(&self, addr: VAddr) -> Option<u32> {
+        // @FIXME: We allow 16-bit aligned access, because instruction fetches are 16-bit aligned
+        debug_assert!(
+            addr == (addr & 0xffff_fffe),
+            " addr={:#x?}  {:#x?}",
+            addr,
+            (addr & 0xffff_fffe)
+        );
+        let b0 = self.read_single(addr).unwrap() as u32;
+        let b1 = self.read_single(addr + 1).unwrap() as u32;
+        let b2 = self.read_single(addr + 2).unwrap() as u32;
+        let b3 = self.read_single(addr + 3).unwrap() as u32;
+        return Some(b3 << 24 | b2 << 16 | b1 << 8 | b0);
+    }
+
+    fn write_32(&mut self, addr: VAddr, value: u32) {
+        debug_assert!(addr == addr & !0x3);
+        self.write_single(addr, (value & 0xff) as u8);
+        self.write_single(addr + 1, ((value >> 8) & 0xff) as u8);
+        self.write_single(addr + 2, ((value >> 16) & 0xff) as u8);
+        self.write_single(addr + 3, ((value >> 24) & 0xff) as u8);
+    }
+}
+
+impl MemoryOperations<RAM, u8> for RAM {
+    fn write_single(&mut self, addr: VAddr, value: u8) -> bool {
         assert!(
             addr >= self.base_address,
             "addr {:#x?} < {:#x?}",
@@ -56,57 +71,18 @@ impl MemoryOperations<RAM> for RAM {
             self.base_address,
             offs
         );
-        match maw {
-            MemoryAccessWidth::BYTE => unsafe {
-                ptr::write(self.data.offset(offs as isize), (value & 0xff) as u8);
-            },
-            MemoryAccessWidth::HALFWORD => {
-                self.write_single(addr, value >> 8, MemoryAccessWidth::BYTE);
-                self.write_single(addr + 1, value, MemoryAccessWidth::BYTE);
-            }
-            MemoryAccessWidth::WORD => {
-                self.write_single(addr, value >> 16, MemoryAccessWidth::HALFWORD);
-                self.write_single(addr + 2, value, MemoryAccessWidth::HALFWORD);
-            }
-            MemoryAccessWidth::LONG => {
-                self.write_single(addr, value >> 32, MemoryAccessWidth::WORD);
-                self.write_single(addr + 4, value, MemoryAccessWidth::WORD);
-            }
-        }
+        unsafe { ptr::write(self.data.offset(offs as isize), (value & 0xff) as u8) }
         true
     }
-
     // @TODO: Will panic if reading out of bounds
-    fn read_single(&self, addr: VAddr, maw: MemoryAccessWidth) -> Option<u64> {
+    fn read_single(&self, addr: VAddr) -> Option<u8> {
         assert!(addr >= self.base_address);
         assert!(addr < self.size.checked_add(self.base_address as usize).unwrap() as u64);
         let offs = addr - self.base_address;
-        match maw {
-            MemoryAccessWidth::BYTE => unsafe {
-                Some(ptr::read(self.data.offset(offs as isize)) as u64 & 0xff)
-            },
-            MemoryAccessWidth::HALFWORD => Some(
-                (self.read_single(addr + 1, MemoryAccessWidth::BYTE).unwrap() << 8
-                    | (self.read_single(addr, MemoryAccessWidth::BYTE).unwrap()))
-                    as u64
-                    & 0xffff,
-            ),
-            MemoryAccessWidth::WORD => Some(
-                (self
-                    .read_single(addr + 2, MemoryAccessWidth::HALFWORD)
-                    .unwrap()
-                    << 16)
-                    | self.read_single(addr, MemoryAccessWidth::HALFWORD).unwrap() & 0xffff,
-            ),
-            MemoryAccessWidth::LONG => Some(
-                ((self.read_single(addr + 4, MemoryAccessWidth::WORD).unwrap() << 32)
-                    | self.read_single(addr, MemoryAccessWidth::WORD).unwrap())
-                    & 0xffffffff,
-            ),
-        }
+
+        unsafe { Some(ptr::read(self.data.offset(offs as isize)) as u8) }
     }
 }
-
 impl RAM {
     pub fn create(base_address: u64, size: usize) -> RAM {
         let data = Vec::<u8>::with_capacity(size).as_mut_ptr();

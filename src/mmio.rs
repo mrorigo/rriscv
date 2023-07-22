@@ -94,22 +94,13 @@ pub trait VirtualDevice: std::fmt::Debug {
 // impl MemoryOperations<PhysicalMemory> for PhysicalMemory {}
 // impl MemoryOperations<UART> for UART {}
 
-impl MemoryOperations<PhysicalMemory> for PhysicalMemory {
-    fn read_single(
-        &self,
-        addr: VAddr,
-        memory_access_width: memory::MemoryAccessWidth,
-    ) -> Option<u64> {
-        self.ram.read_single(addr, memory_access_width)
+impl MemoryOperations<PhysicalMemory, u8> for PhysicalMemory {
+    fn read_single(&self, addr: VAddr) -> Option<u8> {
+        self.ram.read_single(addr)
     }
 
-    fn write_single(
-        &mut self,
-        addr: VAddr,
-        value: u64,
-        memory_access_width: memory::MemoryAccessWidth,
-    ) -> bool {
-        self.ram.write_single(addr, value, memory_access_width)
+    fn write_single(&mut self, addr: VAddr, value: u8) -> bool {
+        self.ram.write_single(addr, value)
     }
 }
 
@@ -142,22 +133,13 @@ impl VirtualDevice for PLIC {
     }
 }
 
-impl MemoryOperations<CLINT> for CLINT {
-    fn read_single(
-        &self,
-        addr: VAddr,
-        memory_access_width: memory::MemoryAccessWidth,
-    ) -> Option<u64> {
-        self.ram.read_single(addr, memory_access_width)
+impl MemoryOperations<CLINT, u8> for CLINT {
+    fn read_single(&self, addr: VAddr) -> Option<u8> {
+        self.ram.read_single(addr)
     }
 
-    fn write_single(
-        &mut self,
-        addr: VAddr,
-        value: u64,
-        memory_access_width: memory::MemoryAccessWidth,
-    ) -> bool {
-        self.ram.write_single(addr, value, memory_access_width)
+    fn write_single(&mut self, addr: VAddr, value: u8) -> bool {
+        self.ram.write_single(addr, value)
     }
 }
 

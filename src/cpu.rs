@@ -1,4 +1,4 @@
-use crate::memory::MemoryOperations;
+use crate::memory::{MemoryOperations, RAMOperations};
 use crate::mmu::MMU;
 use crate::pipeline::{PipelineStages, Stage};
 
@@ -105,7 +105,7 @@ pub struct Core<'a> {
     registers: Registers,
     csrs: CSRRegisters,
     pmode: PrivMode,
-    pub mmu: &'a mut dyn MemoryOperations<MMU>,
+    pub mmu: &'a mut dyn RAMOperations<MMU>,
     pub pc: u64,
     pub prev_pc: u64,
     pub stage: Stage,
@@ -113,7 +113,7 @@ pub struct Core<'a> {
 }
 
 impl<'a> Core<'a> {
-    pub fn create(id: u64, mmu: &'a mut impl MemoryOperations<MMU>) -> Core<'a> {
+    pub fn create(id: u64, mmu: &'a mut impl RAMOperations<MMU>) -> Core<'a> {
         let registers: [RegisterValue; 32] = [0; 32];
         let mut csrs: [RegisterValue; 4096] = [0; 4096];
         csrs[CSRRegister::mhartid as usize] = id;
