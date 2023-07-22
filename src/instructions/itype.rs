@@ -549,6 +549,32 @@ impl Instruction<Itype> {
         }
     }
 
+    pub fn SRET(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: "SRET",
+            args: Some(*args),
+            funct: |core, _args| {
+                core.set_pc(core.read_csr(CSRRegister::sepc));
+
+                let status = core.read_csr(CSRRegister::sstatus);
+                let spie = (status >> 5) & 1;
+                let spp = (status >> 8) & 1;
+                let mprv = match core.pmode() {
+                    crate::cpu::PrivMode::Machine => (status >> 17) & 1,
+                    _ => 0,
+                };
+                // Write MPIE[7] to MIE[3], set MPIE[7] to 1, set MPP[12:11] to 0 and write 1 to MPRV[17]
+                let new_status = (status & !0x21888) | (mprv << 17) | (spie << 3) | (1 << 7);
+                core.write_csr(CSRRegister::sstatus, new_status);
+
+                // mpp is the privilege level the CPU was in prior to trapping to machine privilege mode
+                core.set_pmode(num::FromPrimitive::from_u8(spp as u8).unwrap());
+
+                Stage::WRITEBACK(None)
+            },
+        }
+    }
+
     pub fn FENCE(args: &Itype) -> Instruction<Itype> {
         Instruction {
             mnemonic: "FENCE",
@@ -600,12 +626,12 @@ impl InstructionSelector<Itype> for Itype {
                 CSR_Funct3::CSRWI => Instruction::CSRWI(self),
                 CSR_Funct3::CSRRC => Instruction::CSRRC(self),
                 CSR_Funct3::ECALL_EBREAK_MRET => match self.funct7 {
-                    Funct7::B0001000 => todo!("SRET"),
+                    Funct7::B0001000 => Instruction::SRET(self),
                     Funct7::B0011000 => Instruction::MRET(self),
                     Funct7::B0001001 => Instruction::SFENCE_WMA(self),
                     //Funct7::B0000000 => Instruction::ECALL(self),
                     _ => {
-                        println!("self.funct7 : {:#?}", self.funct7);
+                        //println!("self.funct7 : {:#?}", self.funct7);
                         Instruction::EBREAK(self)
                     } //_ => panic!(),
                 },
