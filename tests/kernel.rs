@@ -1,18 +1,10 @@
-// use core::str::FromStr;
-// use std::{fmt::Display, mem, sync::atomic::AtomicI8};
-
 use elfloader::ElfBinary;
-#[macro_use]
-extern crate num_derive;
+use rriscv::{
+    cpu, elf,
+    memory::{Memory, MemoryAccessWidth, MemoryOperations},
+};
 
-use crate::memory::{Memory, MemoryOperations};
-
-mod cpu;
-mod elf;
-mod memory;
-mod opcodes;
-mod optypes;
-
+#[test]
 fn main() {
     use std::fs;
 
@@ -25,17 +17,18 @@ fn main() {
     binary.load(&mut loader).expect("Can't load the binary?");
 
     for i in (0..16).step_by(1) {
-        let u = memory.read_single((vbase + i) as usize, memory::MemoryAccessWidth::BYTE);
+        let u = memory.read_single((vbase + i) as usize, MemoryAccessWidth::BYTE);
         println!("{}: {:#x?}", i, u.unwrap())
     }
     println!("---");
 
-    let mut cpu = cpu::Core::create(0x539, &memory);
+    // Start HART #0
+    let mut cpu = cpu::Core::create(0x0, &memory);
     cpu.set_pc(vbase);
 
     loop {
         cpu.cycle();
-        println!("x11: {:#x?}", cpu.read_register(11));
+        println!("---");
     }
     // cpu.cycle();
     // cpu.cycle();

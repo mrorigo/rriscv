@@ -10,7 +10,7 @@ pub enum OpType {
     J,
     C, // System (CSR*)
 
-    // Compressed op types
+    // Compressed op types (RVC)
     CR,
     CI,
     CSS,
@@ -22,8 +22,8 @@ pub enum OpType {
 }
 
 pub const COMPRESSED_OPTYPES: [OpType; 32] = [
-    OpType::Unknown, // 0
-    OpType::Unknown,
+    OpType::CIW, // 0
+    OpType::CI,
     OpType::Unknown,
     OpType::Unknown,
     OpType::Unknown,
@@ -39,8 +39,8 @@ pub const COMPRESSED_OPTYPES: [OpType; 32] = [
     OpType::Unknown,
     OpType::Unknown,
     OpType::Unknown,
-    OpType::Unknown,
-    OpType::Unknown,
+    OpType::CS,
+    OpType::CR,
     OpType::Unknown,
     OpType::Unknown, // 20
     OpType::Unknown,
@@ -52,7 +52,7 @@ pub const COMPRESSED_OPTYPES: [OpType; 32] = [
     OpType::Unknown,
     OpType::Unknown,
     OpType::Unknown,
-    OpType::Unknown,
+    OpType::CSS,     // C.SDSP,
     OpType::Unknown, // 31
 ];
 // pub enum CsrInstructionType {
