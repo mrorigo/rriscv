@@ -3,7 +3,7 @@ use std::fmt::Display;
 use quark::Signs;
 
 use crate::{
-    cpu::{CSRRegister, Core, Register, Xlen},
+    cpu::{CSRRegister, Core, Register, TrapCause, Xlen},
     pipeline::Stage,
 };
 
@@ -507,6 +507,22 @@ impl Instruction<Itype> {
         }
     }
 
+    pub fn ECALL(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: "ECALL",
+            args: Some(*args),
+            funct: |core, _args| {
+                let cause = match core.pmode() {
+                    crate::cpu::PrivMode::User => TrapCause::EnvCallFromUMode,
+                    crate::cpu::PrivMode::Supervisor => TrapCause::EnvCallFromSMode,
+                    crate::cpu::PrivMode::Reserved => panic!(),
+                    crate::cpu::PrivMode::Machine => TrapCause::EnvCallFromMMode,
+                };
+                // NOP for now
+                Stage::TRAP(cause)
+            },
+        }
+    }
     pub fn MRET(args: &Itype) -> Instruction<Itype> {
         Instruction {
             mnemonic: "MRET",
@@ -587,7 +603,11 @@ impl InstructionSelector<Itype> for Itype {
                     Funct7::B0001000 => todo!("SRET"),
                     Funct7::B0011000 => Instruction::MRET(self),
                     Funct7::B0001001 => Instruction::SFENCE_WMA(self),
-                    _ => Instruction::EBREAK(self),
+                    //Funct7::B0000000 => Instruction::ECALL(self),
+                    _ => {
+                        println!("self.funct7 : {:#?}", self.funct7);
+                        Instruction::EBREAK(self)
+                    } //_ => panic!(),
                 },
                 _ => panic!("Unknown SYSTEM instruction"),
             },

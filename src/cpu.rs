@@ -3,6 +3,7 @@ use std::usize;
 
 use elfloader::VAddr;
 
+use crate::debugger::{Debugger, DebuggerResult};
 use crate::mmu::MMU;
 use crate::pipeline::{PipelineStages, Stage};
 
@@ -14,8 +15,8 @@ type CSRRegisters = [RegisterValue; 4096];
 
 macro_rules! cpu_trace {
     ($instr:expr) => {
-        print!("C:");
-        $instr;
+        // print!("C:");
+        // $instr;
     };
 }
 
@@ -185,6 +186,8 @@ pub enum CSRRegister {
     mconfigptr = 0xf15,
 }
 
+pub const CYCLES_PER_INSTRUCTION: usize = 5;
+
 pub struct Core {
     pub id: u64,
     pub xlen: Xlen,
@@ -196,6 +199,7 @@ pub struct Core {
     pub prev_pc: u64,
     pub stage: Stage,
     pub cycles: u64,
+    pub debug_cycles: usize,
     pub symbols: HashMap<VAddr, String>,
     pub symboltrace: VecDeque<(VAddr, String)>,
 }
@@ -215,6 +219,7 @@ impl Core {
             pc: 0,
             prev_pc: 0,
             cycles: 0,
+            debug_cycles: 0,
             wfi: false,
             stage: Stage::FETCH,
             symbols: HashMap::new(),
@@ -232,10 +237,12 @@ impl Core {
         self.stage = Stage::FETCH;
     }
 
+    #[inline]
     pub fn pc(&self) -> u64 {
         self.pc
     }
 
+    #[inline]
     pub fn add_pc(&mut self, offs: u64) {
         self.pc += offs
     }
@@ -266,68 +273,45 @@ impl Core {
         }
     }
 
-    pub fn debug_breakpoint(&self, cause: TrapCause) {
-        println!("EBREAK hit: HALTING!\n{:#x?}", cause);
-
-        let core = &self;
-        const STEP: usize = 4;
-        for i in (0..32).step_by(STEP) {
-            print!("x{}-{}:  ", i, i + (STEP - 1));
-            if i == 0 {
-                print!(" ");
-            }
-            if i < 10 {
-                print!(" ");
-            }
-            for reg in i..i + STEP {
-                print!("{:#020x?} ", core.read_register(reg as Register));
-            }
-            println!("");
+    pub fn debug_breakpoint(&mut self, cause: TrapCause, mmu: &mut MMU) {
+        let debugger = Debugger::create();
+        match debugger.enter(self, mmu, cause) {
+            DebuggerResult::Continue => {}
+            DebuggerResult::Step(_nsteps) => self.debug_cycles = _nsteps,
+            DebuggerResult::Quit(reason) => panic!("Quitting: {:?}", reason),
         }
-        println!(
-            "mstatus: {:#10x?}  sstatus: {:#10x?}\nmepc: {:#10x?}  pc: {:#10x?}",
-            core.read_csr(CSRRegister::mstatus),
-            core.read_csr(CSRRegister::sstatus),
-            core.read_csr(CSRRegister::mepc),
-            core.pc()
-        );
-        for i in 0..core.symboltrace.len() {
-            println!("{:x?}", core.symboltrace[i]);
-        }
-        panic!("EBREAK");
     }
 
     pub fn set_pc(&mut self, pc: u64) {
-        let symbol = self.find_closest_symbol(pc);
-        let last_st = self.symboltrace.back();
-        match symbol {
-            Some(sym) => {
-                // cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, sym.1));
-                match last_st {
-                    Some((_last_addr, last_symbol)) => {
-                        if sym.0 == pc && last_symbol.ne(&sym.1) {
-                            //println!("Push symboltrace: {:?}@{:#x?}", sym.1, sym.0);
-                            // cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, sym.1));
-                            self.symboltrace.push_back((pc, sym.1));
-                            if self.symboltrace.len() > 20 {
-                                self.symboltrace.pop_front();
+        if self.symbols.len() > 0 {
+            let symbol = self.find_closest_symbol(pc);
+            let last_st = self.symboltrace.back();
+            match symbol {
+                Some(sym) => {
+                    // cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, sym.1));
+                    match last_st {
+                        Some((_last_addr, last_symbol)) => {
+                            if sym.0 == pc && last_symbol.ne(&sym.1) {
+                                //println!("Push symboltrace: {:?}@{:#x?}", sym.1, sym.0);
+                                cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, sym.1));
+                                self.symboltrace.push_back((pc, sym.1));
+                                if self.symboltrace.len() > 20 {
+                                    self.symboltrace.pop_front();
+                                }
                             }
                         }
-                    }
-                    None => {
-                        self.symboltrace.push_back((pc, sym.1));
+                        None => {
+                            self.symboltrace.push_back((pc, sym.1));
+                        }
                     }
                 }
+                None => {}
             }
-            None => {}
         }
-        // assert!(
-        //     name != "end",
-        //     "Reached 'end' symbol. This usually means your program is over. Be happy!"
-        // );
         self.pc = pc;
     }
 
+    #[inline]
     pub fn pmode(&self) -> PrivMode {
         self.pmode
     }
@@ -341,6 +325,7 @@ impl Core {
 
     /// Extends a value depending on XLEN. If in 32-bit mode, will extend the 31st bit
     /// across all bits above it. In 64-bit mode, this is a no-op.
+    #[inline]
     pub fn bit_extend(&self, value: i64) -> i64 {
         let res = match self.xlen {
             Xlen::Bits32 => ((value as i32) as u32 & 0xffffffff) as i64,
@@ -384,7 +369,6 @@ impl Core {
                 self.csrs[CSRRegister::mstatus as usize] |= value & 0x80000003000de162;
             }
             CSRRegister::sie => {
-                println!("csr_WRITE sie: {:#x?}", value);
                 self.csrs[CSRRegister::mie as usize] &= !0x222;
                 self.csrs[CSRRegister::mie as usize] |= value & 0x222;
             }
@@ -405,18 +389,19 @@ impl Core {
                 self.csrs[reg as usize] = value;
             }
         }
-        if reg == CSRRegister::mip {
-            if self.csrs[reg as usize] != old {
-                println!(
-                    "-> {:?} csr set: {:#x?}  ({:#x?})",
-                    reg, self.csrs[reg as usize], value
-                );
-            }
-        }
+        // if reg == CSRRegister::stvec {
+        //     if self.csrs[reg as usize] != old {
+        //         println!(
+        //             "-> {:?} csr set: {:#x?}  ({:#x?})",
+        //             reg, self.csrs[reg as usize], value
+        //         );
+        //     }
+        // }
 
         //cpu_trace!(println!("write_csr {:#x?} = {:#x?}", reg, value));
     }
 
+    #[inline]
     pub fn read_register(&self, reg: Register) -> RegisterValue {
         let v = match reg {
             0 => 0,
@@ -426,14 +411,9 @@ impl Core {
         v
     }
 
+    #[inline]
     pub fn write_register(&mut self, reg: Register, value: RegisterValue) {
         if reg != 0 {
-            if reg == 2 {
-                // (println!(
-                //     "write_register x{:#?} = {:#x?} pc={:#x?}",
-                //     reg, value, self.pc
-                // ));
-            }
             self.registers[reg as usize] = value;
         } else {
             panic!("Should never write to register x0")
@@ -441,6 +421,12 @@ impl Core {
     }
 
     pub fn cycle(&mut self, mmu: &mut MMU) {
+        if self.debug_cycles > 0 {
+            self.debug_cycles = self.debug_cycles - 1;
+            if self.debug_cycles == 0 {
+                self.debug_breakpoint(TrapCause::Breakpoint, mmu);
+            }
+        }
         //cpu_trace!(println!("stage: {:?}", self.stage));
         self.stage = match self.stage {
             Stage::TRAP(cause) => self.trap(cause),
@@ -512,8 +498,6 @@ impl Core {
             Xlen::Bits32 => 0x80000000 as u64,
             Xlen::Bits64 => 0x8000000000000000 as u64,
         };
-        println!("get_mcause");
-        //println!("val: {:#x?}", val);
         match value {
             TrapCause::InstructionAddressMisaligned
             | TrapCause::InstructionAccessFault

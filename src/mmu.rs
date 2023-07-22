@@ -396,9 +396,9 @@ impl MMU {
 
     /// Returns new `mip` register value
     pub fn tick(&mut self, mip: RegisterValue) -> RegisterValue {
-        self.uart.tick();
         self.clint.tick();
         self.virtio.tick();
+        self.uart.tick();
         self.plic.tick(self.virtio.is_interrupting(), false, mip)
     }
 

@@ -66,10 +66,6 @@ impl Instruction<CItype> {
 
                 let sp = core.read_register(2) as i64;
                 let value = sp.wrapping_add(imm as i16 as i32 as i64) as u64;
-                (println!(
-                    "C.ADDI16SP x{}, {:#?} ; x{} = {:#x?}",
-                    args.rs1_rd, imm as i16 as i32, args.rs1_rd, value
-                ));
                 Stage::writeback(args.rs1_rd, value)
             },
         }

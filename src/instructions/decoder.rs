@@ -49,14 +49,14 @@ pub enum DecodedInstruction {
     CJ(CJtype),
 }
 
+pub struct InstructionDecoder {}
+
 /// Decodes a RawInstruction into a DecodedInstruction variant, which holds the type-
 /// specific parameters for the decoded instruction.
-pub trait InstructionDecoder {
-    fn decode_instruction(&self, instruction: RawInstruction) -> DecodedInstruction;
-}
+impl InstructionDecoder {
+    //    fn decode_instruction(&self, instruction: RawInstruction) -> DecodedInstruction;
 
-impl InstructionDecoder for Core {
-    fn decode_instruction(&self, instruction: RawInstruction) -> DecodedInstruction {
+    pub fn decode_instruction(instruction: RawInstruction) -> DecodedInstruction {
         let word = instruction.word;
         match instruction.compressed {
             false => {

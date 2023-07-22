@@ -48,6 +48,44 @@ pub struct RawInstruction {
     pub pc: u64,
 }
 
+impl RawInstruction {
+    pub fn size_in_bytes(&self) -> u64 {
+        match self.compressed {
+            true => 2,
+            false => 4,
+        }
+    }
+
+    pub fn from_word(instruction: u32, pc: u64) -> Self {
+        match (instruction & 0x3) == 0x03 {
+            true => {
+                pipeline_trace!(println!(
+                    "f:     instruction @ {:#x}: {:#x}",
+                    self.pc(),
+                    instruction
+                ));
+                RawInstruction {
+                    compressed: false,
+                    word: instruction,
+                    pc,
+                }
+            }
+            false => {
+                pipeline_trace!(println!(
+                    "f:     instruction @ {:#x?}: {:#x?} (C)",
+                    self.pc(),
+                    instruction & 0xffff,
+                ));
+                RawInstruction {
+                    compressed: true,
+                    word: instruction & 0xffff,
+                    pc,
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct WritebackStage {
     pub register: Register,
@@ -66,10 +104,6 @@ pub enum Stage {
     IRQ,
 }
 
-pub trait CacheableInstruction {}
-
-//const INSTRUCTION_CACHE: HashMap<u32, Box<dyn CacheableInstruction>> = HashMap::new();
-
 impl Stage {
     pub fn writeback(register: Register, value: RegisterValue) -> Stage {
         Stage::WRITEBACK(Some(WritebackStage { register, value }))
@@ -82,58 +116,25 @@ pub trait PipelineStages {
     fn execute(&mut self, decoded: &DecodedInstruction) -> Stage;
     fn memory(&mut self, mmu: &mut MMU, memory_access: &MemoryAccess) -> Stage;
 
-    //    fn memory(&mut self, memory_access: &MemoryAccess) -> Stage;
     fn writeback(&mut self, writeback: Option<WritebackStage>) -> Stage;
     fn trap(&mut self, cause: TrapCause) -> Stage;
-    //fn exit_trap(&mut self) -> Stage;
 }
 
 impl PipelineStages for Core {
     fn fetch(&mut self, mmu: &mut MMU) -> Stage {
-        let word = mmu.fetch(self.pc());
-
-        let instruction;
-        if word.is_ok() {
-            instruction = word.unwrap()
-        } else {
-            return Stage::TRAP(TrapCause::InstructionAccessFault);
+        match mmu.fetch(self.pc()) {
+            Ok(word) => {
+                let ri = RawInstruction::from_word(word, self.pc());
+                self.prev_pc = self.pc();
+                self.add_pc(ri.size_in_bytes());
+                Stage::DECODE(ri)
+            }
+            _ => Stage::TRAP(TrapCause::InstructionAccessFault),
         }
-        // println!("f: pc={:#x?}", self.pc());
-        // Determine if instruction is compressed
-        let instruction = match (instruction & 0x3) == 0x03 {
-            true => {
-                pipeline_trace!(println!(
-                    "f:     instruction @ {:#x}: {:#x}",
-                    self.pc(),
-                    instruction
-                ));
-                self.add_pc(4);
-                RawInstruction {
-                    compressed: false,
-                    word: instruction,
-                    pc: self.pc() - 4,
-                }
-            }
-            false => {
-                pipeline_trace!(println!(
-                    "f:     instruction @ {:#x?}: {:#x?} (C)",
-                    self.pc(),
-                    instruction & 0xffff,
-                ));
-                self.add_pc(2);
-                RawInstruction {
-                    compressed: true,
-                    word: instruction & 0xffff,
-                    pc: self.pc() - 2,
-                }
-            }
-        };
-        Stage::DECODE(instruction)
     }
 
     fn decode(&mut self, instruction: &RawInstruction) -> Stage {
-        self.prev_pc = instruction.pc;
-        let decoded = (self as &dyn InstructionDecoder).decode_instruction(*instruction);
+        let decoded = InstructionDecoder::decode_instruction(*instruction);
         pipeline_trace!(println!("d:    {:?}", decoded));
 
         Stage::EXECUTE(decoded)
@@ -300,8 +301,9 @@ impl PipelineStages for Core {
             TrapCause::SupervisorTimerIrq => Some(MipMask::STIP),
             TrapCause::MachineExternalIrq => Some(MipMask::MEIP),
             TrapCause::MachineTimerIrq => Some(MipMask::MTIP),
-            _ => panic!(),
+            _ => None,
         };
+
         let is_interrupt = mip_mask.is_some();
 
         let mdeleg = match is_interrupt {
@@ -408,24 +410,24 @@ impl PipelineStages for Core {
             _ => panic!(),
         };
 
-        let cause_reg = match self.pmode() {
+        let cause_reg = match new_privilege_mode {
             PrivMode::Machine => CSRRegister::mcause,
             PrivMode::User => CSRRegister::mcause,
             PrivMode::Supervisor => CSRRegister::scause,
             _ => panic!(),
         };
 
-        let tval_reg = match self.pmode() {
+        let tval_reg = match new_privilege_mode {
             PrivMode::Machine => CSRRegister::mtval,
             PrivMode::User => CSRRegister::stval,
             PrivMode::Supervisor => CSRRegister::utval,
             _ => panic!(),
         };
 
-        let tvec_reg = match self.pmode() {
+        let tvec_reg = match new_privilege_mode {
             PrivMode::Machine => CSRRegister::mtvec,
-            PrivMode::User => CSRRegister::stvec,
-            PrivMode::Supervisor => CSRRegister::utvec,
+            PrivMode::User => CSRRegister::utvec,
+            PrivMode::Supervisor => CSRRegister::stvec,
             _ => panic!(),
         };
 
@@ -434,7 +436,7 @@ impl PipelineStages for Core {
         self.write_csr(tval_reg, self.pc()); // @TODO: Not always correct (could be -4 for IllegalInstruction etc?)
         let tvec_val = self.read_csr(tvec_reg);
         self.set_pc(tvec_val);
-
+        //println!("trap: tvec_reg={:?}", tvec_reg);
         // Add 4 * cause if tvec has vector type address
         if (tvec_val & 0x3) != 0 {
             self.set_pc((tvec_val & !0x3) + 4 * (csr_cause & 0xffff));
@@ -451,12 +453,15 @@ impl PipelineStages for Core {
             PrivMode::Supervisor => {
                 let status = self.read_csr(CSRRegister::sstatus);
                 let sie = (status >> 1) & 1;
-                let new_status =
-                    (status & !0x122) | (sie << 5) | ((u64::from(old_privilege_mode) & 1) << 8);
+                let new_status = (status & !0x122) | (sie << 5) | ((1) << 8);
                 self.write_csr(CSRRegister::mstatus, new_status);
             }
             _ => panic!(),
         }
+
+        // if cause == TrapCause::Breakpoint {
+        //     self.debug_breakpoint(cause,);
+        // }
 
         //panic!("TRAP HANDLED!");
         Stage::FETCH

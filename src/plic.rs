@@ -21,8 +21,8 @@ pub struct PLIC {
 
 const NIPS: usize = 1024;
 
-const VIRTIO_IRQ: u32 = 4; // @TODO: From device tree!
-const UART_IRQ: u32 = 40;
+const VIRTIO_IRQ_NUM: u32 = 4; // @TODO: From device tree!
+const UART_IRQ_NUM: u32 = 40;
 
 impl PLIC {
     pub fn create(range: MemoryRange) -> PLIC {
@@ -46,15 +46,14 @@ impl PLIC {
         // Detect rising edge of virtio irq
         if self.virtio_ip_cache != virtio_irq {
             if virtio_irq {
-                self.set_ip(VIRTIO_IRQ);
-                println!("plic: virtio triggered irq");
+                self.set_ip(VIRTIO_IRQ_NUM);
             }
             self.virtio_ip_cache = virtio_irq;
         }
 
         // UART irq is only true for one tick
         if uart_irq {
-            self.set_ip(UART_IRQ);
+            self.set_ip(UART_IRQ_NUM);
         }
 
         if self.needs_update_irq {
@@ -69,21 +68,22 @@ impl PLIC {
         // Hardcoded VirtIO and UART
         // @TODO: Should be configurable with device tree
 
-        let virtio_ip = ((self.ips[(VIRTIO_IRQ >> 3) as usize] >> (VIRTIO_IRQ & 7)) & 1) == 1;
-        let uart_ip = ((self.ips[(UART_IRQ >> 3) as usize] >> (UART_IRQ & 7)) & 1) == 1;
+        let virtio_ip =
+            ((self.ips[(VIRTIO_IRQ_NUM >> 3) as usize] >> (VIRTIO_IRQ_NUM & 7)) & 1) == 1;
+        let uart_ip = ((self.ips[(UART_IRQ_NUM >> 3) as usize] >> (UART_IRQ_NUM & 7)) & 1) == 1;
 
         // Which should be prioritized, virtio or uart?
 
-        let virtio_priority = self.prios[VIRTIO_IRQ as usize];
-        let uart_priority = self.prios[UART_IRQ as usize];
+        let virtio_priority = self.prios[VIRTIO_IRQ_NUM as usize];
+        let uart_priority = self.prios[UART_IRQ_NUM as usize];
 
-        let virtio_enabled = ((self.enabled >> (VIRTIO_IRQ >> 2)) & 1) == 1;
-        let uart_enabled = ((self.enabled >> (UART_IRQ >> 2)) & 1) == 1;
+        let virtio_enabled = ((self.enabled >> (VIRTIO_IRQ_NUM >> 2)) & 1) == 1;
+        let uart_enabled = ((self.enabled >> (UART_IRQ_NUM >> 2)) & 1) == 1;
 
         let ips = [virtio_ip, uart_ip];
         let enables = [virtio_enabled, uart_enabled];
         let priorities = [virtio_priority, uart_priority];
-        let irqs = [VIRTIO_IRQ, UART_IRQ];
+        let irqs = [VIRTIO_IRQ_NUM >> 2, UART_IRQ_NUM >> 2];
 
         // println!(
         //     "ips: {:?} enables: {:?} priorities: {:?}  threshold: {:#?}",
@@ -94,15 +94,15 @@ impl PLIC {
         let mut priority = 0;
         for i in 0..2 {
             if ips[i] && enables[i] && priorities[i] > self.threshold && priorities[i] > priority {
-                irq = irqs[i] >> 2;
+                irq = irqs[i];
                 priority = priorities[i];
             }
         }
 
         self.irq = irq;
-        // if self.irq != 0 {
-        //     panic!("PLIC IRQ: {:X}", self.irq);
-        // }
+        if self.irq != 0 {
+            println!("PLIC IRQ: {:X}", self.irq);
+        }
 
         mip | (if irq != 0 { MipMask::SEIP as u64 } else { 0 })
     }
@@ -149,6 +149,13 @@ impl MemoryOperations<PLIC, u8> for PLIC {
                 Ok((self.prios[index] >> pos) as u8)
             }
             _ => panic!(),
+        }
+    }
+
+    fn read32(&mut self, address: VAddr) -> Result<u32, TrapCause> {
+        match address {
+            0x0c201004 => Ok(self.irq),
+            _ => todo!("PLIC.read32 {:#x?}", address),
         }
     }
 
