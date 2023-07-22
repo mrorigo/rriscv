@@ -42,7 +42,7 @@ const MAX_QUEUE_SIZE: u32 = 0x2000;
 
 // To simulate disk access time.
 // @TODO: Set more proper number. 500 core clocks may be too short.
-const DISK_ACCESS_DELAY: u64 = 500;
+const DISK_ACCESS_DELAY: u64 = 4500;
 
 const VIRTQ_DESC_F_NEXT: u16 = 1;
 
@@ -234,6 +234,7 @@ impl VirtioBlockDisk {
                 self.registers[VirtioRegister::DriverFeatures as usize]
                     >> (self.registers[VirtioRegister::DriverFeaturesSel as usize] * 32)
             }
+            VirtioRegister::InterruptStatus => self.interrupt_status,
             _ => self.registers[offs],
         }
     }
@@ -263,7 +264,7 @@ impl VirtioBlockDisk {
             }
             Some(VirtioRegister::InterruptACK) => match (value & 0x1) == 1 {
                 true => self.interrupt_status &= !0x1,
-                false => panic!("virtio: unknown ACK"),
+                false => panic!("virtio: unknown ACK: {:#x?}", value),
             },
             _ => {}
         }
