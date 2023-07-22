@@ -3,7 +3,7 @@ use std::fmt::Display;
 use elfloader::VAddr;
 
 use crate::{
-    cpu::{Core, Register, Xlen},
+    cpu::{Core, Register, RegisterValue, Xlen},
     pipeline::{MemoryAccess, Stage},
 };
 
@@ -76,102 +76,83 @@ macro_rules! cs_operation {
     };
 }
 
+macro_rules! instruction {
+    ($type:tt, $name:tt, $mnemonic:expr, $op:expr) => {
+        pub fn $name(args: &$type) -> Instruction<$type> {
+            Instruction {
+                args: Some(*args),
+                mnemonic: $mnemonic,
+                funct: $op,
+            }
+        }
+    };
+}
+
+macro_rules! cs_instruction {
+    ($name:tt, $mnemonic:expr, $op:expr) => {
+        instruction!(CStype, $name, $mnemonic, $op);
+    };
+}
+
 #[allow(non_snake_case)]
 impl Instruction<CStype> {
-    pub fn C_AND(args: &CStype) -> Instruction<CStype> {
-        Instruction {
-            args: Some(*args),
-            mnemonic: "C.AND",
-            funct: cs_operation!(|_core, rs1v, rs2v| rs1v & rs2v),
-        }
-    }
+    cs_instruction!(
+        C_AND,
+        "C.AND",
+        cs_operation!(|core, rs1v, rs2v| rs1v & rs2v)
+    );
 
-    pub fn C_SUBW(args: &CStype) -> Instruction<CStype> {
-        Instruction {
-            mnemonic: &"SUBW",
-            args: Some(*args),
-            funct: |core, args| {
-                let r1v = core.read_register(args.rs1_rd) as i32;
-                let r2v = core.read_register(args.rs2) as i32;
-                let value = core.bit_extend((r1v.wrapping_sub(r2v)) as i64) as u64;
-                Stage::writeback(args.rs1_rd, value)
-            },
-        }
-    }
+    cs_instruction!(C_OR, "C.OR", cs_operation!(|core, rs1v, rs2v| rs1v | rs2v));
 
-    pub fn C_ADDW(args: &CStype) -> Instruction<CStype> {
-        Instruction {
-            mnemonic: &"C.ADDW",
-            args: Some(*args),
-            funct: |core, args| {
-                let r1v = core.read_register(args.rs1_rd) as i32;
-                let r2v = core.read_register(args.rs2) as i32;
-                let value = core.bit_extend((r1v.wrapping_add(r2v)) as i64) as u64;
-                Stage::writeback(args.rs1_rd, value)
-            },
-        }
-    }
+    cs_instruction!(
+        C_XOR,
+        "C.XOR",
+        cs_operation!(|core, rs1v, rs2v| rs1v ^ rs2v)
+    );
 
-    pub fn C_OR(args: &CStype) -> Instruction<CStype> {
-        Instruction {
-            args: Some(*args),
-            mnemonic: "C.OR",
-            funct: cs_operation!(|_core, rs1v, rs2v| rs1v | rs2v),
-        }
-    }
+    cs_instruction!(
+        C_SUBW,
+        "C.SUBW",
+        cs_operation!(
+            |core: &mut Core, rs1v: RegisterValue, rs2v: RegisterValue| core
+                .bit_extend(((rs1v as i32).wrapping_sub(rs2v as i32)) as i64)
+                as u64
+        )
+    );
 
-    pub fn C_XOR(args: &CStype) -> Instruction<CStype> {
-        Instruction {
-            args: Some(*args),
-            mnemonic: "C.XOR",
-            funct: cs_operation!(|_core, rs1v, rs2v| rs1v ^ rs2v),
-        }
-    }
+    cs_instruction!(
+        C_ADDW,
+        "C.ADDW",
+        cs_operation!(
+            |core: &mut Core, rs1v: RegisterValue, rs2v: RegisterValue| core
+                .bit_extend(((rs1v as i32).wrapping_add(rs2v as i32)) as i64)
+                as u64
+        )
+    );
 
-    pub fn C_SUB(args: &CStype) -> Instruction<CStype> {
-        Instruction {
-            mnemonic: &"C.SUB",
-            args: Some(*args),
-            funct: |core, args| {
-                let r1v = core.read_register(args.rs1_rd) as i64;
-                let r2v = core.read_register(args.rs2) as i64;
-                let value = core.bit_extend((r1v.wrapping_sub(r2v)) as i64) as u64;
-                Stage::writeback(args.rs1_rd, value)
-            },
-        }
-    }
+    cs_instruction!(
+        C_SUB,
+        "C.SUB",
+        cs_operation!(
+            |core: &mut Core, rs1v: RegisterValue, rs2v: RegisterValue| core
+                .bit_extend((rs1v.wrapping_sub(rs2v)) as i64)
+                as u64
+        )
+    );
 
-    pub fn C_SD(args: &CStype) -> Instruction<CStype> {
-        Instruction {
-            args: Some(*args),
-            mnemonic: &"C.SD",
-            funct: |core, args| {
-                let rs1v = core.read_register(args.rs1_rd);
-                let rs2v = core.read_register(args.rs2);
-                let addr = rs1v + args.offset as VAddr;
+    cs_instruction!(C_SD, "C.SD", |core, args| {
+        let rs1v = core.read_register(args.rs1_rd);
+        let rs2v = core.read_register(args.rs2);
+        let addr = rs1v + args.offset as VAddr;
+        Stage::MEMORY(MemoryAccess::WRITE64(addr, rs2v))
+    });
 
-                Stage::MEMORY(MemoryAccess::WRITE64(addr, rs2v))
-            },
-        }
-    }
-
-    pub fn C_SW(args: &CStype) -> Instruction<CStype> {
-        Instruction {
-            args: Some(*args),
-            mnemonic: &"C.SW",
-            funct: |core, args| {
-                let rs1v = core.read_register(args.rs1_rd);
-                let rs2v = core.read_register(args.rs2);
-                let addr = (rs1v + args.offset as u64) as VAddr;
-                instruction_trace!(println!(
-                    "C.SW: rs1v={:#x?} rs2v={:#x?} offs={:#x?} addr={:#x?}",
-                    rs1v, rs2v, args.offset, addr
-                ));
-
-                Stage::MEMORY(MemoryAccess::WRITE32(addr, rs2v as u32))
-            },
-        }
-    }
+    cs_instruction!(C_SW, "C.SW", |core, args| {
+        let rs1v = core.read_register(args.rs1_rd);
+        let rs2v = core.read_register(args.rs2);
+        let addr = (rs1v + args.offset as u64) as VAddr;
+        Stage::MEMORY(MemoryAccess::WRITE32(addr, rs2v as u32))
+    });
 }
 
 impl InstructionSelector<CStype> for CStype {
