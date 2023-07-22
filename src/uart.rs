@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use elfloader::VAddr;
 
-use crate::{mmio::VirtualDevice, mmu::MemoryRange};
+use crate::{cpu::TrapCause, mmio::VirtualDevice, mmu::MemoryRange};
 
 #[derive(Copy, Clone)]
 #[repr(u8)]
@@ -113,7 +113,7 @@ impl VirtualDevice for UART {
         self.range.name
     }
 
-    fn write(&mut self, addr: VAddr, value: u8) -> bool {
+    fn write(&mut self, addr: VAddr, value: u8) -> Option<TrapCause> {
         let mut state = self.state.borrow_mut();
         let lcr = state.lcr >> 7;
         let offs = addr - self.range.start;
@@ -155,16 +155,16 @@ impl VirtualDevice for UART {
             _ => {}
         }
         //panic!("UART::write");
-        true
+        None
     }
 
     //    fn
 
-    fn read(&self, addr: VAddr) -> u8 {
+    fn read(&mut self, addr: VAddr) -> Result<u8, TrapCause> {
         let mut state = self.state.borrow_mut();
         let lcr = state.lcr;
         let offs = addr - self.range.start;
-        match offs {
+        Ok(match offs {
             0 => match (lcr >> 7) == 0 {
                 true => UART::update_iir(true, &mut state).0,
                 false => 0, // @TODO: DLL divisor latch LSB
@@ -179,6 +179,6 @@ impl VirtualDevice for UART {
             5 => state.lsr,
             7 => state.scr,
             _ => 0,
-        }
+        })
     }
 }

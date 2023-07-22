@@ -1,6 +1,7 @@
 use elfloader::{PAddr, VAddr};
 
 use crate::{
+    cpu::TrapCause,
     memory::{MemoryOperations, RAM},
     mmio::VirtualDevice,
     mmu::MemoryRange,
@@ -58,11 +59,11 @@ impl MemoryWrapper {
         self.memory.write16(p_address, value);
     }
 
-    pub fn write32(&mut self, p_address: u64, value: u32) {
+    pub fn write32(&mut self, p_address: u64, value: u32) -> Option<TrapCause> {
         self.memory.write32(p_address, value)
     }
 
-    pub fn write64(&mut self, p_address: u64, value: u64) {
+    pub fn write64(&mut self, p_address: u64, value: u64) -> Option<TrapCause> {
         self.memory.write64(p_address, value)
     }
 
@@ -112,6 +113,10 @@ impl VIRTIO {
         }
     }
 
+    pub fn is_interrupting(&self) -> bool {
+        self.device.is_interrupting()
+    }
+
     pub fn load_fs(&mut self, contents: Vec<u8>) {
         self.device.init(contents);
     }
@@ -129,25 +134,25 @@ impl VirtualDevice for VIRTIO {
     fn name(&self) -> &str {
         self.range.name
     }
-    fn write(&mut self, _addr: VAddr, _value: u8) -> bool {
+    fn write(&mut self, _addr: VAddr, _value: u8) -> Option<TrapCause> {
         todo!()
     }
 
-    fn read(&self, _addr: VAddr) -> u8 {
+    fn read(&mut self, _addr: VAddr) -> Result<u8, TrapCause> {
         todo!()
     }
 }
 
 impl MemoryOperations<VIRTIO, u8> for VIRTIO {
-    fn read8(&self, addr: VAddr) -> Option<u8> {
+    fn read8(&mut self, addr: VAddr) -> Result<u8, TrapCause> {
         todo!("virtio.read8(addr)");
     }
 
-    fn write8(&mut self, addr: VAddr, value: u8) -> bool {
+    fn write8(&mut self, addr: VAddr, value: u8) -> Option<TrapCause> {
         todo!("virtio.write8(addr, value)");
     }
 
-    fn read32(&self, addr: VAddr) -> Option<u32> {
+    fn read32(&mut self, addr: VAddr) -> Option<u32> {
         let b0 = self.device.load(addr) as u32;
         let b1 = self.device.load(addr + 1) as u32;
         let b2 = self.device.load(addr + 2) as u32;
@@ -157,28 +162,29 @@ impl MemoryOperations<VIRTIO, u8> for VIRTIO {
         Some(val)
     }
 
-    fn write32(&mut self, addr: VAddr, value: u32) {
+    fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause> {
         println!("VIRTIO WRITE32 {:#x?} => {:#x?}", addr, value);
         // todo!("virtio.write32(addr, value)");
         self.device.store(addr + 0, (value & 0xff) as u8);
         self.device.store(addr + 1, ((value >> 8) & 0xff) as u8);
         self.device.store(addr + 2, ((value >> 16) & 0xff) as u8);
         self.device.store(addr + 3, ((value >> 24) & 0xff) as u8);
+        None
     }
 
-    fn read64(&self, addr: VAddr) -> Option<u64> {
+    fn read64(&mut self, _addr: VAddr) -> Option<u64> {
         todo!()
     }
 
-    fn write64(&mut self, addr: VAddr, value: u64) {
+    fn write64(&mut self, _addr: VAddr, _value: u64) -> Option<TrapCause> {
         todo!()
     }
 
-    fn read16(&self, addr: VAddr) -> Option<u16> {
+    fn read16(&mut self, _addr: VAddr) -> Option<u16> {
         todo!()
     }
 
-    fn write16(&mut self, addr: VAddr, value: u16) {
+    fn write16(&mut self, _addr: VAddr, _value: u16) -> Option<TrapCause> {
         todo!()
     }
 }
@@ -208,7 +214,7 @@ impl VirtioBlockDisk {
     }
 
     /// Indicates whether `VirtioBlockDisk` raises an interrupt signal
-    pub fn is_interrupting(&mut self) -> bool {
+    pub fn is_interrupting(&self) -> bool {
         (self.interrupt_status & 0x1) == 1
     }
 

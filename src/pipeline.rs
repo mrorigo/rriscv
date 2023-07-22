@@ -90,7 +90,7 @@ pub trait PipelineStages {
 
 impl PipelineStages for Core {
     fn fetch(&mut self, mmu: &mut MMU) -> Stage {
-        let word = mmu.read_32(self.pc());
+        let word = mmu.fetch(self.pc());
 
         let instruction;
         if word.is_some() {
@@ -162,8 +162,8 @@ impl PipelineStages for Core {
         match *memory_access {
             MemoryAccess::READ8(offset, register, sign_extend) => {
                 let value = mmu.read8(offset);
-                if value.is_none() {
-                    return Stage::ENTER_TRAP(TrapCause::LoadAccessFault(offset));
+                if value.is_err() {
+                    return Stage::ENTER_TRAP(value.err().unwrap());
                 }
                 // pipeline_trace!(println!("m:    READ8 @ {:#x?}: {:#x?}", offset, value));
                 let value = value.unwrap();
@@ -206,8 +206,14 @@ impl PipelineStages for Core {
                 }))
             }
             MemoryAccess::READ64(offset, register, sign_extend) => {
-                let l = mmu.read_32(offset).unwrap();
-                let h = mmu.read_32(offset + 4).unwrap();
+                let l = match mmu.read_32(offset) {
+                    None => return Stage::ENTER_TRAP(TrapCause::LoadAccessFault(offset)),
+                    Some(val) => val,
+                };
+                let h = match mmu.read_32(offset + 4) {
+                    None => return Stage::ENTER_TRAP(TrapCause::LoadAccessFault(offset + 4)),
+                    Some(val) => val,
+                };
                 let comp = ((h as u64) << 32) | l as u64;
                 let value = match sign_extend {
                     true => comp.sign_extend(64 - 32),

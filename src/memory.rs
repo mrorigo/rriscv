@@ -4,6 +4,8 @@ use std::u8;
 
 use elfloader::VAddr;
 
+use crate::cpu::TrapCause;
+
 // type VAddr = u64;
 // type PAddr = u64;
 
@@ -19,55 +21,46 @@ impl MemoryCellType for u8 {}
 
 #[allow(unused_variables)]
 pub trait MemoryOperations<T, T2: MemoryCellType> {
-    fn read8(&self, addr: VAddr) -> Option<T2>;
-    fn write8(&mut self, addr: VAddr, value: T2) -> bool;
+    fn read8(&mut self, addr: VAddr) -> Result<T2, TrapCause>;
+    fn write8(&mut self, addr: VAddr, value: T2) -> Option<TrapCause>;
 
-    fn read64(&self, addr: VAddr) -> Option<u64>;
-    fn write64(&mut self, addr: VAddr, value: u64);
+    fn read64(&mut self, addr: VAddr) -> Option<u64>;
+    fn write64(&mut self, addr: VAddr, value: u64) -> Option<TrapCause>;
 
-    fn read32(&self, addr: VAddr) -> Option<u32>;
-    fn write32(&mut self, addr: VAddr, value: u32);
+    fn read32(&mut self, addr: VAddr) -> Option<u32>;
+    fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause>;
 
-    fn read16(&self, addr: VAddr) -> Option<u16>;
-    fn write16(&mut self, addr: VAddr, value: u16);
+    fn read16(&mut self, addr: VAddr) -> Option<u16>;
+    fn write16(&mut self, addr: VAddr, value: u16) -> Option<TrapCause>;
 
     //    fn add_segment(&mut self, base_address: VAddr, size: usize);
 }
 
 pub trait RAMOperations<T>: MemoryOperations<T, u8> {
-    fn read_32(&self, addr: VAddr) -> Option<u32> {
-        // @FIXME: We allow 16-bit aligned access, because instruction fetches are 16-bit aligned
-        // debug_assert!(
-        //     addr == (addr & 0xffff_fffe),
-        //     " addr={:#x?}  {:#x?}",
-        //     addr,
-        //     (addr & 0xffff_fffe)
-        // );
-        let val = self.read32(addr).unwrap();
-        return Some(val);
+    fn read_32(&mut self, addr: VAddr) -> Option<u32> {
+        self.read32(addr)
     }
 
     fn write_32(&mut self, addr: VAddr, value: u32) {
-        //        debug_assert!(addr == addr & !0x3);
         self.write32(addr, value);
     }
 }
 
 impl MemoryOperations<RAM, u8> for RAM {
-    fn write8(&mut self, addr: VAddr, value: u8) -> bool {
-        debug_assert!(addr >= self.base_address);
-        debug_assert!(addr < self.size.checked_add(self.base_address as usize).unwrap() as u64);
+    fn write8(&mut self, addr: VAddr, value: u8) -> Option<TrapCause> {
+        if addr < self.base_address
+            || addr >= self.size.checked_add(self.base_address as usize).unwrap() as u64
+        {
+            return Some(TrapCause::LoadAccessFault(addr));
+        }
 
         let offs = addr - self.base_address;
-        // if addr >= 0x80000000 && addr < 0x80002200 {
-        //     println!("w8 {:#x?} @ {:#x?}", value, addr);
-        // }
         unsafe { ptr::write(self.data.offset(offs as isize), (value & 0xff) as u8) }
-        true
+        None
     }
 
     // @TODO: Will panic if reading out of bounds
-    fn read8(&self, addr: VAddr) -> Option<u8> {
+    fn read8(&mut self, addr: VAddr) -> Result<u8, TrapCause> {
         debug_assert!(addr >= self.base_address);
         debug_assert!(addr < self.size.checked_add(self.base_address as usize).unwrap() as u64);
         let offs = addr - self.base_address;
@@ -78,10 +71,10 @@ impl MemoryOperations<RAM, u8> for RAM {
         //     println!("r8 {:#x?} @ {:#x?}", value, addr);
         // }
 
-        Some(value)
+        Ok(value)
     }
 
-    fn read32(&self, addr: VAddr) -> Option<u32> {
+    fn read32(&mut self, addr: VAddr) -> Option<u32> {
         let offs = addr - self.base_address;
 
         let mut data = 0 as u32;
@@ -97,32 +90,67 @@ impl MemoryOperations<RAM, u8> for RAM {
         Some(data)
     }
 
-    fn write32(&mut self, addr: VAddr, value: u32) {
+    fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause> {
         let mut v = value;
         for i in 0..4 {
-            self.write8(addr + i, v as u8);
+            match self.write8(addr + i, v as u8) {
+                Some(trap) => return Some(trap),
+                None => {}
+            }
             v >>= 8;
         }
+        None
     }
 
-    fn write16(&mut self, addr: VAddr, value: u16) {
+    fn write16(&mut self, addr: VAddr, value: u16) -> Option<TrapCause> {
         let mut v = value;
         for i in 0..2 {
-            self.write8(addr + i, v as u8);
+            match self.write8(addr + i, v as u8) {
+                Some(trap) => return Some(trap),
+                None => {}
+            }
             v >>= 8;
         }
+        None
     }
 
-    fn read16(&self, addr: VAddr) -> Option<u16> {
-        todo!()
+    fn read16(&mut self, addr: VAddr) -> Option<u16> {
+        assert!(addr > self.base_address, "Addr {:#x?}", addr);
+        let offs = addr - self.base_address;
+
+        let mut data = 0 as u16;
+        for i in 0..2 {
+            let b = unsafe {
+                Some(ptr::read(self.data.offset(i + offs as isize)) as u8).unwrap() as u16
+            };
+            data |= b << (i * 8)
+        }
+        Some(data)
     }
 
-    fn read64(&self, addr: VAddr) -> Option<u64> {
-        todo!()
+    fn read64(&mut self, addr: VAddr) -> Option<u64> {
+        let l = match self.read32(addr) {
+            None => return None,
+            Some(val) => val,
+        };
+        let h = match self.read32(addr + 4) {
+            None => return None,
+            Some(val) => val,
+        };
+        let comp = ((h as u64) << 32) | l as u64;
+        Some(comp)
     }
 
-    fn write64(&mut self, addr: VAddr, value: u64) {
-        todo!()
+    fn write64(&mut self, addr: VAddr, value: u64) -> Option<TrapCause> {
+        match self.write32(addr, value as u32) {
+            None => {
+                self.write32(addr + 4, (value >> 32) as u32);
+                None
+            }
+            Some(cause) => Some(cause),
+        }
+
+        //        todo!()
     }
 }
 

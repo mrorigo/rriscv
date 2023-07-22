@@ -1,6 +1,7 @@
 use elfloader::VAddr;
 
 use crate::{
+    cpu::TrapCause,
     memory::{MemoryOperations, RAM},
     mmu::MemoryRange,
 };
@@ -81,42 +82,42 @@ impl PLIC {
 pub trait VirtualDevice {
     fn name(&self) -> &str;
     fn includes(&self, addr: VAddr) -> bool;
-    fn write(&mut self, addr: VAddr, value: u8) -> bool;
-    fn read(&self, addr: VAddr) -> u8;
+    fn write(&mut self, addr: VAddr, value: u8) -> Option<TrapCause>;
+    fn read(&mut self, addr: VAddr) -> Result<u8, TrapCause>;
     fn tick(&mut self) {}
 }
 
 impl MemoryOperations<PhysicalMemory, u8> for PhysicalMemory {
-    fn read8(&self, addr: VAddr) -> Option<u8> {
+    fn read8(&mut self, addr: VAddr) -> Result<u8, TrapCause> {
         self.ram.read8(addr)
     }
 
-    fn write8(&mut self, addr: VAddr, value: u8) -> bool {
+    fn write8(&mut self, addr: VAddr, value: u8) -> Option<TrapCause> {
         self.ram.write8(addr, value)
     }
 
-    fn read32(&self, addr: VAddr) -> Option<u32> {
+    fn read32(&mut self, addr: VAddr) -> Option<u32> {
         self.ram.read32(addr)
     }
 
-    fn write32(&mut self, addr: VAddr, value: u32) {
+    fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause> {
         self.ram.write32(addr, value)
     }
 
-    fn read64(&self, addr: VAddr) -> Option<u64> {
+    fn read64(&mut self, addr: VAddr) -> Option<u64> {
         self.ram.read64(addr)
     }
 
-    fn write64(&mut self, addr: VAddr, value: u64) {
+    fn write64(&mut self, addr: VAddr, value: u64) -> Option<TrapCause> {
         self.ram.write64(addr, value)
     }
 
-    fn read16(&self, addr: VAddr) -> Option<u16> {
+    fn read16(&mut self, addr: VAddr) -> Option<u16> {
         self.ram.read16(addr)
     }
 
-    fn write16(&mut self, addr: VAddr, value: u16) {
-        self.ram.write16(addr, value);
+    fn write16(&mut self, addr: VAddr, value: u16) -> Option<TrapCause> {
+        self.ram.write16(addr, value)
     }
 }
 
@@ -128,11 +129,11 @@ impl VirtualDevice for PhysicalMemory {
         self.range.includes(addr)
     }
 
-    fn write(&mut self, _addr: VAddr, _value: u8) -> bool {
+    fn write(&mut self, _addr: VAddr, _value: u8) -> Option<TrapCause> {
         panic!("")
     }
 
-    fn read(&self, _addr: VAddr) -> u8 {
+    fn read(&mut self, _addr: VAddr) -> Result<u8, TrapCause> {
         todo!()
     }
 }
@@ -146,77 +147,77 @@ impl VirtualDevice for PLIC {
         self.range.name
     }
 
-    fn write(&mut self, addr: VAddr, value: u8) -> bool {
+    fn write(&mut self, addr: VAddr, value: u8) -> Option<TrapCause> {
         self.ram.write8(addr, value)
     }
 
-    fn read(&self, addr: VAddr) -> u8 {
-        self.ram.read8(addr).unwrap()
+    fn read(&mut self, addr: VAddr) -> Result<u8, TrapCause> {
+        Ok(self.ram.read8(addr).unwrap())
     }
 }
 
 impl MemoryOperations<PLIC, u8> for PLIC {
-    fn read8(&self, addr: VAddr) -> Option<u8> {
+    fn read8(&mut self, addr: VAddr) -> Result<u8, TrapCause> {
         self.ram.read8(addr)
     }
 
-    fn write8(&mut self, addr: VAddr, value: u8) -> bool {
+    fn write8(&mut self, addr: VAddr, value: u8) -> Option<TrapCause> {
         self.ram.write8(addr, value)
     }
 
-    fn read16(&self, addr: VAddr) -> Option<u16> {
+    fn read16(&mut self, addr: VAddr) -> Option<u16> {
         self.ram.read16(addr)
     }
 
-    fn write16(&mut self, addr: VAddr, value: u16) {
+    fn write16(&mut self, addr: VAddr, value: u16) -> Option<TrapCause> {
         self.ram.write16(addr, value)
     }
 
-    fn read32(&self, addr: VAddr) -> Option<u32> {
+    fn read32(&mut self, addr: VAddr) -> Option<u32> {
         self.ram.read32(addr)
     }
-    fn write32(&mut self, addr: VAddr, value: u32) {
+    fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause> {
         self.ram.write32(addr, value)
     }
 
-    fn read64(&self, addr: VAddr) -> Option<u64> {
+    fn read64(&mut self, addr: VAddr) -> Option<u64> {
         self.ram.read64(addr)
     }
-    fn write64(&mut self, addr: VAddr, value: u64) {
+    fn write64(&mut self, addr: VAddr, value: u64) -> Option<TrapCause> {
         self.ram.write64(addr, value)
     }
 }
 
 impl MemoryOperations<CLINT, u8> for CLINT {
-    fn read8(&self, addr: VAddr) -> Option<u8> {
+    fn read8(&mut self, addr: VAddr) -> Result<u8, TrapCause> {
         self.ram.read8(addr)
     }
 
-    fn write8(&mut self, addr: VAddr, value: u8) -> bool {
+    fn write8(&mut self, addr: VAddr, value: u8) -> Option<TrapCause> {
         self.ram.write8(addr, value)
     }
 
-    fn read32(&self, addr: VAddr) -> Option<u32> {
+    fn read32(&mut self, addr: VAddr) -> Option<u32> {
         self.ram.read32(addr)
     }
 
-    fn write32(&mut self, addr: VAddr, value: u32) {
+    fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause> {
         self.ram.write32(addr, value)
     }
 
-    fn read64(&self, addr: VAddr) -> Option<u64> {
+    fn read64(&mut self, addr: VAddr) -> Option<u64> {
         todo!()
     }
 
-    fn write64(&mut self, addr: VAddr, value: u64) {
+    fn write64(&mut self, addr: VAddr, value: u64) -> Option<TrapCause> {
         todo!()
     }
 
-    fn read16(&self, addr: VAddr) -> Option<u16> {
+    fn read16(&mut self, addr: VAddr) -> Option<u16> {
         todo!()
     }
 
-    fn write16(&mut self, addr: VAddr, value: u16) {
+    fn write16(&mut self, addr: VAddr, value: u16) -> Option<TrapCause> {
         todo!()
     }
 }
@@ -230,11 +231,11 @@ impl VirtualDevice for CLINT {
         self.range.name
     }
 
-    fn write(&mut self, addr: VAddr, value: u8) -> bool {
+    fn write(&mut self, addr: VAddr, value: u8) -> Option<TrapCause> {
         self.ram.write8(addr, value)
     }
 
-    fn read(&self, addr: VAddr) -> u8 {
-        self.ram.read8(addr).unwrap()
+    fn read(&mut self, addr: VAddr) -> Result<u8, TrapCause> {
+        Ok(self.ram.read8(addr).unwrap())
     }
 }

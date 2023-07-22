@@ -52,7 +52,7 @@ pub enum Xlen {
     //Bits128 = 128,  // nor any for 128-bit
 }
 
-#[derive(Clone, Copy, Debug, FromPrimitive)]
+#[derive(Clone, Copy, PartialEq, Debug, FromPrimitive)]
 #[repr(u8)]
 pub enum PrivMode {
     User = 0,
@@ -363,7 +363,12 @@ impl Core {
 
     pub fn write_register(&mut self, reg: Register, value: RegisterValue) {
         if reg != 0 {
-            //cpu_trace!(println!("write_register x{:#?} = {:#x?}", reg, value));
+            if reg == 2 {
+                // (println!(
+                //     "write_register x{:#?} = {:#x?} pc={:#x?}",
+                //     reg, value, self.pc
+                // ));
+            }
             self.registers[reg as usize] = value;
         } else {
             panic!("Should never write to register x0")
@@ -381,5 +386,8 @@ impl Core {
             Stage::MEMORY(memory_access) => self.memory(mmu, &memory_access),
             Stage::WRITEBACK(writeback) => self.writeback(writeback),
         };
+        mmu.update_privilege_mode(self.pmode);
+        mmu.update_satp(self.read_csr(CSRRegister::satp), self.xlen);
+        mmu.update_mstatus(self.read_csr(CSRRegister::mstatus));
     }
 }
