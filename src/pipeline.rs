@@ -9,6 +9,13 @@ use crate::{
     memory::MemoryAccessWidth,
 };
 
+macro_rules! pipeline_trace {
+    ($instr:expr) => {
+        print!("PIPELINE: ");
+        $instr;
+    };
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum MemoryAccess {
     READ8(VAddr, Register),
@@ -69,11 +76,13 @@ impl PipelineStages for Core<'_> {
             .read_single(self.pc, MemoryAccessWidth::WORD)
             .unwrap() as u32;
 
-        println!("fetch: instruction @ {:#x}: {:#x}", self.pc, instruction);
-
         // Determine if instruction is compressed
         let instruction = match (instruction & 0x3) == 0x03 {
             true => {
+                pipeline_trace!(println!(
+                    "fetch: instruction @ {:#x}: {:#x}",
+                    self.pc, instruction
+                ));
                 self.pc += 4;
                 RawInstruction {
                     compressed: false,
@@ -82,8 +91,12 @@ impl PipelineStages for Core<'_> {
                 }
             }
             false => {
+                pipeline_trace!(println!(
+                    "fetch: compressed instruction {:#x?} @ {:#x?}",
+                    instruction & 0xffff,
+                    self.pc
+                ));
                 self.pc += 2;
-                println!("fetch: compressed instruction {:#x?}", instruction & 0xffff);
                 RawInstruction {
                     compressed: true,
                     word: instruction & 0xffff,
@@ -97,7 +110,7 @@ impl PipelineStages for Core<'_> {
     fn decode(&mut self, instruction: &RawInstruction) -> Stage {
         self.prev_pc = instruction.pc;
         let decoded = (self as &dyn InstructionDecoder).decode_instruction(*instruction);
-        println!("decode: decoded: {:?}", decoded);
+        pipeline_trace!(println!("decode: decoded: {:?}", decoded));
         Stage::EXECUTE(decoded)
     }
 
@@ -166,7 +179,7 @@ impl PipelineStages for Core<'_> {
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE64(offset, value) => {
-                println!("cpu::memory::WRITE64: {:#x?} @ {:#x?}", value, offset);
+                pipeline_trace!(println!("memory::WRITE64: {:#x?} @ {:#x?}", value, offset));
                 self.mmu
                     .write_single(offset, value as u64, MemoryAccessWidth::LONG);
                 Stage::WRITEBACK(None)
@@ -182,7 +195,7 @@ impl PipelineStages for Core<'_> {
 
         // Update the instret CSR based on what PrivMode we are in
 
-        let (instretcsr, instrethcsr) = match self.pmode {
+        let (instretcsr, instrethcsr) = match self.pmode() {
             PrivMode::Machine => (CSRRegister::minstret, CSRRegister::minstreth),
             PrivMode::Supervisor => (CSRRegister::instret, CSRRegister::instreth),
             PrivMode::User => (CSRRegister::instret, CSRRegister::instreth),

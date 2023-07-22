@@ -10,7 +10,7 @@ type CSRRegisters = [RegisterValue; 4096];
 
 macro_rules! cpu_trace {
     ($instr:expr) => {
-        print!("CPU_TRACE: ");
+        print!("CPU: ");
         $instr;
     };
 }
@@ -23,11 +23,12 @@ pub enum Xlen {
     //Bits128 = 128,  // nor any for 128-bit
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, FromPrimitive)]
+#[repr(u8)]
 pub enum PrivMode {
-    User,
-    Supervisor,
-    Machine,
+    User = 0,
+    Supervisor = 1,
+    Machine = 3,
 }
 
 #[allow(non_camel_case_types)]
@@ -97,13 +98,13 @@ pub enum CSRRegister {
     mconfigptr = 0xf15,
 }
 
-#[derive(Debug)]
+//#[derive(Debug)]
 pub struct Core<'a> {
     pub id: u64,
     pub xlen: Xlen,
     registers: Registers,
     csrs: CSRRegisters,
-    pub pmode: PrivMode,
+    pmode: PrivMode,
     pub mmu: &'a mut dyn MemoryOperations<MMU>,
     pub pc: u64,
     pub prev_pc: u64,
@@ -141,6 +142,7 @@ impl<'a> Core<'a> {
     }
 
     pub fn set_pc(&mut self, pc: u64) {
+        cpu_trace!(println!("set_pc = {:#x?}", pc));
         self.pc = pc;
     }
 
@@ -148,9 +150,16 @@ impl<'a> Core<'a> {
         self.pmode
     }
 
+    pub fn set_pmode(&mut self, pmode: PrivMode) -> PrivMode {
+        let ret = self.pmode;
+        cpu_trace!(println!("set_pmode = {:#x?} (was {:#x?})", pmode, ret));
+        self.pmode = pmode;
+        ret
+    }
+
     pub fn read_csr(&self, reg: CSRRegister) -> RegisterValue {
         // SSTATUS, SIE, and SIP are subsets of MSTATUS, MIE, and MIP
-        match reg {
+        let value = match reg {
             CSRRegister::fflags => self.csrs[CSRRegister::fcsr as usize] & 0x1f,
             CSRRegister::frm => (self.csrs[CSRRegister::fcsr as usize] >> 5) & 0x7,
             CSRRegister::sstatus => self.csrs[CSRRegister::mstatus as usize] & 0x80000003000de162,
@@ -158,7 +167,10 @@ impl<'a> Core<'a> {
             CSRRegister::sip => self.csrs[CSRRegister::mip as usize] & 0x222,
             // CSRRegister::time => self.mmu.get_clint().read_mtime(),
             _ => self.csrs[reg as usize],
-        }
+        };
+        cpu_trace!(println!("read_csr {:#x?} = {:#x?}", reg, value));
+
+        value
     }
 
     /// Extends a value depending on XLEN. If in 32-bit mode, will extend the 31st bit
@@ -171,6 +183,7 @@ impl<'a> Core<'a> {
     }
 
     pub fn write_csr(&mut self, reg: CSRRegister, value: RegisterValue) {
+        cpu_trace!(println!("write_csr {:#x?} = {:#x?}", reg, value));
         self.csrs[reg as usize] = value;
     }
 
