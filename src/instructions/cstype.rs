@@ -6,8 +6,10 @@ use crate::{
 };
 
 use super::{
-    functions::Funct3, opcodes::CompressedOpcode, CompressedFormatDecoder, CompressedFormatType,
-    ImmediateDecoder, Instruction, InstructionExcecutor, InstructionSelector,
+    functions::{C0_Funct3, Funct3},
+    opcodes::CompressedOpcode,
+    CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder, Instruction,
+    InstructionExcecutor, InstructionSelector,
 };
 
 /// This instruction format is shared between C0 and C1 ops, hence it
@@ -34,7 +36,7 @@ impl CompressedFormatDecoder<CStype> for CStype {
     fn decode(word: u16) -> CStype {
         CStype {
             opcode: num::FromPrimitive::from_u8((word & 3) as u8).unwrap(),
-            rs1_rd: ((word >> 7) & 3) as u8 + 8,
+            rs1_rd: ((word >> 7) & 7) as u8 + 8,
             rs2: ((word >> 2) & 7) as u8 + 8,
             shamt: (((word >> 7) & 0b100000) | ((word >> 2) & 0x1f)) as u8,
             offset: CStype::decode_immediate(word),
@@ -131,6 +133,7 @@ impl Instruction<CStype> {
                 let rs1v = core.read_register(args.rs1_rd);
                 let rs2v = core.read_register(args.rs2);
                 let addr = rs1v + (args.offset as u64);
+                debug_trace!(println!("rs1v: {:#x?}", rs1v));
 
                 Stage::MEMORY(MemoryAccess::WRITE64(addr, rs2v))
             },
@@ -141,7 +144,10 @@ impl Instruction<CStype> {
 impl InstructionSelector<CStype> for CStype {
     fn select(&self, _xlen: crate::cpu::Xlen) -> Instruction<CStype> {
         match self.opcode {
-            CompressedOpcode::C0 => todo!(),
+            CompressedOpcode::C0 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
+                C0_Funct3::C_SD => Instruction::C_SD(self),
+                _ => panic!(),
+            },
             CompressedOpcode::C1 => match self.funct6 {
                 0b100011 => match self.funct2 {
                     0b00 => todo!(),
