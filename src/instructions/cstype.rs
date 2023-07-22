@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use elfloader::VAddr;
+
 use crate::{
     cpu::{Core, Register, Xlen},
     pipeline::{MemoryAccess, Stage, WritebackStage},
@@ -117,11 +119,25 @@ impl Instruction<CStype> {
             args: Some(*args),
             mnemonic: &"C.SD",
             funct: |core, args| {
-                let rs1v = core.read_register(args.rs1_rd) as i64;
+                let rs1v = core.read_register(args.rs1_rd);
                 let rs2v = core.read_register(args.rs2);
-                let addr = (rs1v + (args.offset as i32 as i64)) as u64;
+                let addr = (rs1v + args.offset as VAddr);
 
                 Stage::MEMORY(MemoryAccess::WRITE64(addr, rs2v))
+            },
+        }
+    }
+
+    pub fn C_SW(args: &CStype) -> Instruction<CStype> {
+        Instruction {
+            args: Some(*args),
+            mnemonic: &"C.SW",
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1_rd);
+                let rs2v = core.read_register(args.rs2);
+                let addr = (rs1v + args.offset as u64) as VAddr;
+
+                Stage::MEMORY(MemoryAccess::WRITE32(addr, rs2v as u32))
             },
         }
     }
@@ -132,6 +148,7 @@ impl InstructionSelector<CStype> for CStype {
         match self.opcode {
             CompressedOpcode::C0 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                 C0_Funct3::C_SD => Instruction::C_SD(self),
+                C0_Funct3::C_SW => Instruction::C_SW(self),
                 _ => panic!(),
             },
             CompressedOpcode::C1 => match self.funct6 {

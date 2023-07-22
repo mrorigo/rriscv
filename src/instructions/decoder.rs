@@ -55,7 +55,7 @@ pub trait InstructionDecoder {
     fn decode_instruction(&self, instruction: RawInstruction) -> DecodedInstruction;
 }
 
-impl InstructionDecoder for Core<'_> {
+impl InstructionDecoder for Core {
     fn decode_instruction(&self, instruction: RawInstruction) -> DecodedInstruction {
         let word = instruction.word;
         match instruction.compressed {

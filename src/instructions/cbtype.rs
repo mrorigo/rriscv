@@ -82,7 +82,9 @@ impl Instruction<CBtype> {
             funct: |core, args| {
                 let rs1v = core.read_register(args.rs1);
                 if rs1v == 0 {
-                    core.set_pc((args.offset.sign_extend(64 - 9) as i64 + core.pc() as i64) as u64)
+                    let target =
+                        ((args.offset as i64).sign_extend(64 - 9) + core.prev_pc as i64) as u64;
+                    core.set_pc(target)
                 }
                 Stage::WRITEBACK(None)
             },

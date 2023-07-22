@@ -16,6 +16,8 @@ pub struct CJtype {
 
 #[allow(non_snake_case)]
 impl Instruction<CJtype> {
+    /// C.J performs an unconditional control transfer. The [10-bit] offset is sign-extended and added
+    /// to the pc to form the jump target address.
     pub fn C_J(args: &CJtype) -> Instruction<CJtype> {
         Instruction {
             args: Some(*args),

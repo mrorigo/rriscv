@@ -53,7 +53,7 @@ impl Instruction<CIWtype> {
             mnemonic: "C.ADDI4SPN",
             funct: |core, args| {
                 let sp = core.read_register(2);
-                let value = sp + args.imm as u64;
+                let value = sp + (args.imm as u64 >> 2);
                 debug_assert!(args.imm != 0);
                 Stage::writeback(args.rd, value)
             },
