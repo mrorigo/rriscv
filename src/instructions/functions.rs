@@ -54,6 +54,7 @@ pub enum OpImm_Funct3 {
     XORI = 0b100,
     ORI = 0b110,
     ANDI = 0b111,
+    SRLI_SRAI = 0b101,
 }
 
 #[allow(non_camel_case_types)]

@@ -78,7 +78,7 @@ impl Instruction<CItype> {
         Instruction {
             mnemonic: "C.LUI",
             args: Some(*args),
-            funct: |core, args| {
+            funct: |_core, args| {
                 let value = ((args.imm as u64) << 12) as u32 as u64;
                 // instruction_trace!(println!(
                 //     "C.LUI x{}, {:#x?} ; x{} = {:#x?}",
@@ -141,7 +141,7 @@ impl Instruction<CItype> {
         Instruction {
             mnemonic: "C.LI",
             args: Some(*args),
-            funct: |core, args| {
+            funct: |_core, args| {
                 let value = (args.imm as u64).sign_extend(64 - 6);
                 Stage::writeback(args.rs1_rd, value)
             },
@@ -196,7 +196,7 @@ impl InstructionSelector<CItype> for CItype {
                 C2_Funct3::C_LDSP => Instruction::C_LDSP(self),
                 _ => panic!(),
             },
-            _ => panic!(),
+            _ => panic!("opcode {:#x?} unknown for CIType", self.opcode),
         }
     }
 }

@@ -1,5 +1,3 @@
-use std::ptr;
-
 use elfloader::*;
 
 use crate::{memory::MemoryOperations, mmu::MMU};
@@ -63,18 +61,18 @@ impl ElfLoader for Loader<'_> {
         Ok(())
     }
 
-    fn tls(
-        &mut self,
-        tdata_start: VAddr,
-        _tdata_length: u64,
-        total_size: u64,
-        _align: u64,
-    ) -> Result<(), ElfLoaderErr> {
-        let tls_end = tdata_start + total_size;
-        println!(
-            "Initial TLS region is at = {:#x} -- {:#x}",
-            tdata_start, tls_end
-        );
-        Ok(())
-    }
+    // fn tls(
+    //     &mut self,
+    //     tdata_start: VAddr,
+    //     _tdata_length: u64,
+    //     total_size: u64,
+    //     _align: u64,
+    // ) -> Result<(), ElfLoaderErr> {
+    //     let tls_end = tdata_start + total_size;
+    //     println!(
+    //         "Initial TLS region is at = {:#x} -- {:#x}",
+    //         tdata_start, tls_end
+    //     );
+    //     Ok(())
+    // }
 }

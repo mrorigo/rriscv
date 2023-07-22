@@ -1,6 +1,8 @@
+use quark::Signs;
+
 use crate::{
     cpu::{Core, Register, Xlen},
-    pipeline::{Stage, WritebackStage},
+    pipeline::Stage,
 };
 
 use super::{
@@ -34,14 +36,18 @@ impl Instruction<Jtype> {
             mnemonic: "JAL",
             args: Some(*args),
             funct: |core, args| {
-                const M: u32 = 1 << (20 - 1);
-                let se_imm20 = ((args.imm20 << 1) ^ M) - M;
-                let target = core.prev_pc + se_imm20 as u64;
+                let se_imm20 = ((args.imm20 << 1) as i64).sign_extend(64 - 20);
+                // const M: u32 = 1 << (20 - 1);
+                // let se_imm20 = ((args.imm20 << 1) ^ M) - M;
+                let target = (core.prev_pc as i64 + se_imm20) as u64;
                 core.set_pc(target);
 
-                //                debug_trace!(println!("JAL {:#x?}", target));
-
-                Stage::writeback(args.rd, core.pc)
+                instruction_trace!(println!("JAL {:#x?}", target));
+                if args.rd != 0 {
+                    Stage::writeback(args.rd, core.pc)
+                } else {
+                    Stage::WRITEBACK(None)
+                }
             },
         }
     }
@@ -60,7 +66,7 @@ impl ImmediateDecoder<u32, u32> for Jtype {
 }
 
 impl InstructionSelector<Jtype> for Jtype {
-    fn select(&self, xlen: Xlen) -> Instruction<Jtype> {
+    fn select(&self, _xlen: Xlen) -> Instruction<Jtype> {
         match self.opcode {
             MajorOpcode::JAL => Instruction::JAL(self),
             _ => panic!(),

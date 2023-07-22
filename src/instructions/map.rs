@@ -1,4 +1,4 @@
-use crate::instructions::{CompressedFormat, InstructionFormat};
+use crate::instructions::InstructionFormat;
 
 pub const FORMAT_MAP: [InstructionFormat; 128] = [
     InstructionFormat::Unknown, /*0000000 */

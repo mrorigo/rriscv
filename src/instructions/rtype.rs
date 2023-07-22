@@ -2,14 +2,13 @@ use std::fmt::Display;
 
 use crate::{
     cpu::{Core, Register, Xlen},
-    pipeline::{Stage, WritebackStage},
+    pipeline::Stage,
 };
 
 use super::{
     functions::{Funct3, Funct7, Op_Funct3, RV32M_Funct3},
     opcodes::MajorOpcode,
-    FormatDecoder, Instruction, InstructionExcecutor, InstructionFormat, InstructionFormatType,
-    InstructionSelector,
+    FormatDecoder, Instruction, InstructionExcecutor, InstructionFormatType, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -54,6 +53,19 @@ impl Display for Instruction<Rtype> {
 
 #[allow(non_snake_case)]
 impl Instruction<Rtype> {
+    pub fn ADD(itype: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"ADD",
+            args: Some(*itype),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1);
+                let r2v = core.read_register(args.rs2);
+                let value = core.bit_extend((r1v + r2v) as i64) as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
     pub fn AND(itype: &Rtype) -> Instruction<Rtype> {
         Instruction {
             mnemonic: &"AND",
@@ -121,13 +133,13 @@ impl InstructionSelector<Rtype> for Rtype {
                 },
                 Funct7::B0100000 => todo!("SUB&SRA"),
                 Funct7::B0000000 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
-                    Op_Funct3::ADD_SUB => todo!("ADD, since Funct7=0"),
+                    Op_Funct3::ADD_SUB => Instruction::ADD(self),
                     Op_Funct3::SRL_SRA => todo!("SRL, since Funct7=0"),
                     Op_Funct3::AND => Instruction::AND(self),
                     Op_Funct3::OR => Instruction::OR(self),
                     _ => todo!(),
                 },
-                _ => todo!("R-type Funct7 not supported"),
+                // _ => todo!("R-type Funct7 not supported"),
             },
             _ => panic!(),
         }

@@ -1,7 +1,7 @@
-use std::borrow::BorrowMut;
-use std::cell::RefCell;
+use std::collections::HashMap;
 
-use crate::memory::{MemoryOperations, RAMOperations};
+use elfloader::VAddr;
+
 use crate::mmu::MMU;
 use crate::pipeline::{PipelineStages, Stage};
 
@@ -113,6 +113,7 @@ pub struct Core {
     pub prev_pc: u64,
     pub stage: Stage,
     pub cycles: u64,
+    pub symbols: HashMap<VAddr, String>,
 }
 
 impl Core {
@@ -134,7 +135,13 @@ impl Core {
             prev_pc: 0,
             cycles: 0,
             stage: Stage::FETCH,
+            symbols: HashMap::new(),
         }
+    }
+
+    pub fn add_symbol(&mut self, addr: VAddr, name: String) {
+        println!("cpu: Adding symbol {:?} = {:#x?}", name, addr);
+        self.symbols.insert(addr, name);
     }
 
     pub fn reset(&mut self, pc: u64) {
@@ -146,8 +153,49 @@ impl Core {
         self.pc
     }
 
+    fn find_closest_symbol(&self, addr: VAddr) -> String {
+        match self.symbols.get(&addr) {
+            Some(symbol) => symbol.clone(),
+            None => {
+                let unknown_str = "<unknown>".to_string();
+                let unknown = Some(unknown_str);
+                let mut closest = None;
+                // let mut second = None;
+                let mut closest_dist = 1e6 as u64;
+                // let mut second_dist = 1e6 as u64;
+                for sym in self.symbols.iter() {
+                    let dist = i64::abs(addr as i64 - *sym.0 as i64) as u64;
+                    // println!(
+                    //     "dist from {:#x?} to {:?}@{:#x?} is {}",
+                    //     pc, sym.1, sym.0, dist
+                    // );
+                    if dist < closest_dist && dist > 0 && *sym.0 < addr {
+                        // second = closest.clone();
+                        // second_dist = closest_dist;
+                        closest = Some(sym.1.clone());
+                        closest_dist = dist;
+                        // println!(
+                        //     "dist from {:#x?} to {:?}@{:#x?} is {}",
+                        //     pc, sym.1, sym.0, dist
+                        // );
+                    }
+                }
+                if closest.is_some() {
+                    closest.unwrap()
+                } else {
+                    unknown.unwrap()
+                }
+            }
+        }
+    }
+
     pub fn set_pc(&mut self, pc: u64) {
-        cpu_trace!(println!("set_pc = {:#x?}", pc));
+        let name = self.find_closest_symbol(pc);
+        cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, name));
+        // assert!(
+        //     name != "end",
+        //     "Reachend 'end' symbol. This usually means your program is over. Be happy!"
+        // );
         self.pc = pc;
     }
 
@@ -162,6 +210,15 @@ impl Core {
         ret
     }
 
+    /// Extends a value depending on XLEN. If in 32-bit mode, will extend the 31st bit
+    /// across all bits above it. In 64-bit mode, this is a no-op.
+    pub fn bit_extend(&self, value: i64) -> i64 {
+        match self.xlen {
+            Xlen::Bits32 => value as i32 as i64,
+            Xlen::Bits64 => value,
+        }
+    }
+
     pub fn read_csr(&self, reg: CSRRegister) -> RegisterValue {
         // SSTATUS, SIE, and SIP are subsets of MSTATUS, MIE, and MIP
         let value = match reg {
@@ -173,22 +230,13 @@ impl Core {
             // CSRRegister::time => self.mmu.get_clint().read_mtime(),
             _ => self.csrs[reg as usize],
         };
-        cpu_trace!(println!("read_csr {:#x?} = {:#x?}", reg, value));
+        //        cpu_trace!(println!("read_csr {:#x?} = {:#x?}", reg, value));
 
         value
     }
 
-    /// Extends a value depending on XLEN. If in 32-bit mode, will extend the 31st bit
-    /// across all bits above it. In 64-bit mode, this is a no-op.
-    pub fn bit_extend(&self, value: i64) -> i64 {
-        match self.xlen {
-            Xlen::Bits32 => value as i32 as i64,
-            Xlen::Bits64 => value,
-        }
-    }
-
     pub fn write_csr(&mut self, reg: CSRRegister, value: RegisterValue) {
-        cpu_trace!(println!("write_csr {:#x?} = {:#x?}", reg, value));
+        //cpu_trace!(println!("write_csr {:#x?} = {:#x?}", reg, value));
         self.csrs[reg as usize] = value;
     }
 
@@ -197,13 +245,13 @@ impl Core {
             0 => 0,
             _ => self.registers[reg as usize],
         };
-        cpu_trace!(println!("read_register x{:#?} = {:#x?}", reg, v));
+        //cpu_trace!(println!("read_register x{:#?} = {:#x?}", reg, v));
         v
     }
 
     pub fn write_register(&mut self, reg: Register, value: RegisterValue) {
         if reg != 0 {
-            cpu_trace!(println!("write_register x{:#?} = {:#x?}", reg, value));
+            //cpu_trace!(println!("write_register x{:#?} = {:#x?}", reg, value));
             self.registers[reg as usize] = value;
         } else {
             panic!("Should never write to register x0")

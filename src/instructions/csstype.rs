@@ -65,7 +65,7 @@ impl Instruction<CSStype> {
         Instruction {
             args: Some(*args),
             mnemonic: "C.FSWSP",
-            funct: |core, args| todo!(),
+            funct: |_core, _args| todo!(),
         }
     }
 }

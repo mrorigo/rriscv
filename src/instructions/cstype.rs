@@ -4,7 +4,7 @@ use elfloader::VAddr;
 
 use crate::{
     cpu::{Core, Register, Xlen},
-    pipeline::{MemoryAccess, Stage, WritebackStage},
+    pipeline::{MemoryAccess, Stage},
 };
 
 use super::{
@@ -106,10 +106,10 @@ impl Instruction<CStype> {
             args: Some(*args),
             mnemonic: &"C.SRAI",
             funct: |core, args| {
-                let rs1v = core.read_register(args.rs1_rd);
-                let rs2v = core.read_register(args.rs2);
-                let value = todo!();
-                Stage::writeback(args.rs1_rd, value)
+                let _rs1v = core.read_register(args.rs1_rd);
+                let _rs2v = core.read_register(args.rs2);
+                let _value = todo!();
+                //Stage::writeback(args.rs1_rd, value)
             },
         }
     }
@@ -121,7 +121,7 @@ impl Instruction<CStype> {
             funct: |core, args| {
                 let rs1v = core.read_register(args.rs1_rd);
                 let rs2v = core.read_register(args.rs2);
-                let addr = (rs1v + args.offset as VAddr);
+                let addr = rs1v + args.offset as VAddr;
 
                 Stage::MEMORY(MemoryAccess::WRITE64(addr, rs2v))
             },

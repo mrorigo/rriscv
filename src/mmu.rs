@@ -1,6 +1,4 @@
-use std::{any::Any, cell::Ref};
-
-use elfloader::{PAddr, VAddr};
+use elfloader::VAddr;
 use include_bytes_aligned::include_bytes_aligned;
 
 use crate::{
@@ -79,11 +77,7 @@ impl MemoryOperations<MMU, u8> for MMU {
     }
 }
 
-impl RAMOperations<MMU> for MMU {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
+impl RAMOperations<MMU> for MMU {}
 
 impl MMU {
     pub fn create() -> MMU {

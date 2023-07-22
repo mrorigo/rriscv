@@ -5,7 +5,7 @@ use crate::{
 
 macro_rules! instruction_trace {
     ($instr:expr) => {
-        print!("INSTRUCTION: ");
+        print!("PIPELINE: execute:  ");
         $instr;
     };
 }

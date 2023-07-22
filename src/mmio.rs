@@ -1,27 +1,19 @@
-use std::cell::{RefCell, RefMut};
+use std::cell::RefCell;
 
 use elfloader::VAddr;
 
 use crate::{
-    memory::{self, MemoryOperations, RAM},
+    memory::{MemoryOperations, RAM},
     mmu::MemoryRange,
 };
 
-macro_rules! mmio_trace {
-    ($instr:expr) => {
-        print!("MMIO: ");
-        $instr;
-    };
-}
-
-// #[derive(Debug, Copy, Clone)]
-// pub enum MMIODevice {
-//     UART(MemoryRange),
-//     MEMORY(MemoryRange),
-//     CLINT(MemoryRange),
-//     IC(MemoryRange),
-//     VIRTIO(MemoryRange),
+// macro_rules! mmio_trace {
+//     ($instr:expr) => {
+//         print!("MMIO: ");
+//         $instr;
+//     };
 // }
+
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]
 enum UartIirMask {
@@ -298,11 +290,11 @@ impl VirtualDevice for PhysicalMemory {
         self.range.includes(addr)
     }
 
-    fn write(&mut self, addr: VAddr, value: u8) -> bool {
+    fn write(&mut self, _addr: VAddr, _value: u8) -> bool {
         panic!("")
     }
 
-    fn read(&self, addr: VAddr) -> u8 {
+    fn read(&self, _addr: VAddr) -> u8 {
         todo!()
     }
 }
@@ -361,11 +353,11 @@ impl VirtualDevice for VIRTIO {
     fn name(&self) -> &str {
         self.range.name
     }
-    fn write(&mut self, addr: VAddr, value: u8) -> bool {
+    fn write(&mut self, _addr: VAddr, _value: u8) -> bool {
         todo!()
     }
 
-    fn read(&self, addr: VAddr) -> u8 {
+    fn read(&self, _addr: VAddr) -> u8 {
         todo!()
     }
 }

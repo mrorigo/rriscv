@@ -4,7 +4,7 @@ use quark::Signs;
 
 use crate::{
     cpu::{Core, Register, Xlen},
-    pipeline::{Stage, WritebackStage},
+    pipeline::Stage,
 };
 
 use super::{
@@ -51,14 +51,14 @@ impl Instruction<Utype> {
             mnemonic: "AUIPC",
             args: Some(*utype),
             funct: |core, args| {
-                let se_imm20 = (args.imm20.sign_extend(32 - 20));
+                let se_imm20 = args.imm20.sign_extend(32 - 20);
                 // const M: u32 = 1 << (20 - 1);
                 // let se_imm20 = (args.imm20 ^ M) - M;
                 let value = core.prev_pc.wrapping_add((se_imm20 << 12) as u64) as u32;
-                instruction_trace!(println!(
-                    "AUIPC x{}, {:#x?}\t; pc={:#x?} x{}={:#x?}",
-                    args.rd, se_imm20, core.prev_pc, args.rd, value
-                ));
+                // instruction_trace!(println!(
+                //     "AUIPC x{}, {:#x?}\t; pc={:#x?} x{}={:#x?}",
+                //     args.rd, se_imm20, core.prev_pc, args.rd, value
+                // ));
                 Stage::writeback(args.rd, value as u64)
             },
         }
@@ -69,7 +69,7 @@ impl Instruction<Utype> {
         Instruction {
             mnemonic: "LUI",
             args: Some(*utype),
-            funct: |core, args| {
+            funct: |_core, args| {
                 let value = (args.imm20 as u64) << 12;
                 Stage::writeback(args.rd, value)
             },

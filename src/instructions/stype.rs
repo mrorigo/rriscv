@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use elfloader::VAddr;
 use quark::Signs;
 
@@ -72,6 +74,20 @@ impl Instruction<Stype> {
             },
         }
     }
+    pub fn SB(args: &Stype) -> Instruction<Stype> {
+        Instruction {
+            mnemonic: "SB",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1);
+                let rs2v = core.read_register(args.rs2);
+
+                // The effective byte address is obtained by adding register rs1 to the sign-extended 12-bit offset
+                let addr = rs1v + (args.imm12 as u64).sign_extend(64 - 12) as VAddr;
+                Stage::MEMORY(MemoryAccess::WRITE8(addr, rs2v as u8))
+            },
+        }
+    }
 }
 
 impl InstructionSelector<Stype> for Stype {
@@ -79,17 +95,32 @@ impl InstructionSelector<Stype> for Stype {
         match self.opcode {
             MajorOpcode::STORE => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
                 Store_Funct3::SD => Instruction::SD(self),
-                Store_Funct3::SB => Instruction::SW(self),
+                Store_Funct3::SB => Instruction::SB(self),
                 Store_Funct3::SH => todo!(),
-                Store_Funct3::SW => Instruction::SD(self),
+                Store_Funct3::SW => Instruction::SW(self),
             },
             _ => panic!(),
         }
     }
 }
 
+impl Display for Instruction<Stype> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.args.is_some() {
+            write!(f, "{}", self.mnemonic)
+        } else {
+            let args = self.args.unwrap();
+            write!(
+                f,
+                "{} x{},({})x{}",
+                self.mnemonic, args.rs2, args.imm12, args.rs1,
+            )
+        }
+    }
+}
 impl InstructionExcecutor for Instruction<Stype> {
     fn run(&self, core: &mut Core) -> Stage {
+        instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }
