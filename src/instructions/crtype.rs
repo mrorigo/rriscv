@@ -47,6 +47,29 @@ impl Instruction<CRtype> {
             },
         }
     }
+
+    pub fn C_JR(crtype: &CRtype) -> Instruction<CRtype> {
+        Instruction {
+            args: Some(*crtype),
+            mnemonic: "C.JR",
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1_rd);
+                core.set_pc(rs1v);
+                Stage::WRITEBACK(None)
+            },
+        }
+    }
+
+    pub fn C_MV(crtype: &CRtype) -> Instruction<CRtype> {
+        Instruction {
+            args: Some(*crtype),
+            mnemonic: "C.MV",
+            funct: |core, args| {
+                let value = core.read_register(args.rs2);
+                Stage::writeback(args.rs1_rd, value)
+            },
+        }
+    }
 }
 
 impl Display for Instruction<CRtype> {
@@ -67,8 +90,8 @@ impl InstructionSelector<CRtype> for CRtype {
                 match self.funct1 {
                     // C.JR / C.MV
                     0 => match self.rs2 {
-                        0 => todo!("C.JR"),
-                        _ => todo!("C.MV"),
+                        0 => Instruction::C_JR(self),
+                        _ => Instruction::C_MV(self),
                     },
                     // C.EBREAK / C.JALR / C.ADD
                     1 => match self.rs2 {

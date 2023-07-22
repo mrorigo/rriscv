@@ -85,9 +85,17 @@ pub enum RV32M_Funct3 {
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, FromPrimitive)]
 pub enum C1_Funct3 {
-    C_LUI = 0b011, // ADDI16SP shares the opcode
-    C_LI = 0b010,
     C_ADDI = 0b000,
+    C_ADDIW = 0b001,
+    C_LI = 0b010,
+    C_LUI = 0b011, // ADDI16SP shares the opcode
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, FromPrimitive)]
+pub enum C2_Funct3 {
+    C_SLLI = 0b000, // C.SLLI64 shares funct3
+    C_LDSP = 0b011, // C.FLWSP
 }
 
 #[allow(non_camel_case_types)]

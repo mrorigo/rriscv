@@ -3,10 +3,10 @@ use crate::instructions::{CompressedFormat, InstructionFormat};
 pub const COMPRESSED_FORMAT_MAP: [CompressedFormat; 32] = [
     CompressedFormat::CIW, // 0
     CompressedFormat::CI,
+    CompressedFormat::CI,
     CompressedFormat::Unknown,
     CompressedFormat::Unknown,
-    CompressedFormat::Unknown,
-    CompressedFormat::Unknown,
+    CompressedFormat::CI,
     CompressedFormat::Unknown,
     CompressedFormat::Unknown,
     CompressedFormat::Unknown,
@@ -15,7 +15,7 @@ pub const COMPRESSED_FORMAT_MAP: [CompressedFormat; 32] = [
     CompressedFormat::Unknown,
     CompressedFormat::Unknown,
     CompressedFormat::CI, // C.LUI , ADDI16SP
-    CompressedFormat::Unknown,
+    CompressedFormat::CI, // C.LDSP etc
     CompressedFormat::Unknown,
     CompressedFormat::Unknown,
     CompressedFormat::CS,

@@ -8,7 +8,7 @@ use crate::{
 };
 
 use super::{
-    functions::{C1_Funct3, Funct3},
+    functions::{C1_Funct3, C2_Funct3, Funct3},
     opcodes::CompressedOpcode,
     CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder, Instruction,
     InstructionExcecutor, InstructionSelector,
@@ -17,7 +17,7 @@ use super::{
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct CItype {
     pub opcode: CompressedOpcode,
-    pub rd: Register,
+    pub rs1_rd: Register,
     pub imm: u16,
     pub funct3: Funct3,
 }
@@ -28,7 +28,7 @@ impl CompressedFormatDecoder<CItype> for CItype {
     fn decode(word: u16) -> CItype {
         CItype {
             opcode: num::FromPrimitive::from_u8((word & 3) as u8).unwrap(),
-            rd: ((word >> 7) & 31) as u8,
+            rs1_rd: ((word >> 7) & 31) as u8,
             imm: CItype::decode_immediate(word as u16),
             funct3: num::FromPrimitive::from_u8(((word >> 13) & 0x7) as u8).unwrap(),
         }
@@ -53,9 +53,9 @@ impl Instruction<CItype> {
                 let value = (args.imm as u64) << 12;
                 debug_trace!(println!(
                     "C.LUI x{}, {:#x?} ; x{} = {:#x?}",
-                    args.rd, args.imm, args.rd, value
+                    args.rs1_rd, args.imm, args.rs1_rd, value
                 ));
-                Stage::writeback(args.rd, value)
+                Stage::writeback(args.rs1_rd, value)
             },
         }
     }
@@ -66,10 +66,44 @@ impl Instruction<CItype> {
             args: Some(*args),
             funct: |core, args| {
                 let value = core
-                    .read_register(args.rd)
+                    .read_register(args.rs1_rd)
                     .wrapping_add((args.imm as u64).sign_extend(64 - 12));
 
-                Stage::writeback(args.rd, value)
+                Stage::writeback(args.rs1_rd, value)
+            },
+        }
+    }
+
+    pub fn C_SLLI(args: &CItype) -> Instruction<CItype> {
+        Instruction {
+            mnemonic: &"C.SLLI",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1_rd);
+                let mask = match core.xlen {
+                    Xlen::Bits32 => 0x1f,
+                    Xlen::Bits64 => 0x3f,
+                };
+                let shamt = (args.imm) & mask;
+                let value = ((rs1v as i64) << shamt) as u64;
+                Stage::writeback(args.rs1_rd, value)
+            },
+        }
+    }
+
+    pub fn C_LDSP(args: &CItype) -> Instruction<CItype> {
+        Instruction {
+            mnemonic: &"LD",
+            args: Some(*args),
+            funct: |core, args| {
+                let ze_imm = args.imm as u64;
+                let sp = core.read_register(2);
+                let addr = sp + (ze_imm << 3);
+                debug_trace!(println!(
+                    "C.LDSP: sp={:#x?} ze_imm={:#x?} addr={:#x?}",
+                    sp, ze_imm, addr
+                ));
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ64(addr, args.rs1_rd))
             },
         }
     }
@@ -80,7 +114,24 @@ impl Instruction<CItype> {
             args: Some(*args),
             funct: |core, args| {
                 let value = (args.imm as u64).sign_extend(64 - 6);
-                Stage::writeback(args.rd, value)
+                Stage::writeback(args.rs1_rd, value)
+            },
+        }
+    }
+
+    pub fn C_ADDIW(args: &CItype) -> Instruction<CItype> {
+        Instruction {
+            mnemonic: &"C.ADDIW",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1_rd) as i64;
+                let seimm = (args.imm as u64).sign_extend(64 - 6);
+                let value = core.bit_extend(rs1v.wrapping_add(seimm as i64)) as i32 as u64;
+                debug_trace!(println!(
+                    "C.ADDIW x{}, {}  ; x{} = {:#x?}",
+                    args.rs1_rd, seimm as i64, args.rs1_rd, value
+                ));
+                Stage::writeback(args.rs1_rd, value)
             },
         }
     }
@@ -92,7 +143,7 @@ impl Display for Instruction<CItype> {
             write!(f, "{}", self.mnemonic)
         } else {
             let args = self.args.unwrap();
-            write!(f, "{} x{},{}", self.mnemonic, args.rd, args.imm,)
+            write!(f, "{} x{},{}", self.mnemonic, args.rs1_rd, args.imm,)
         }
     }
 }
@@ -104,6 +155,12 @@ impl InstructionSelector<CItype> for CItype {
                 C1_Funct3::C_LUI => Instruction::C_LUI(self),
                 C1_Funct3::C_ADDI => Instruction::C_ADDI(self),
                 C1_Funct3::C_LI => Instruction::C_LI(self),
+                C1_Funct3::C_ADDIW => Instruction::C_ADDIW(self),
+                _ => panic!(),
+            },
+            CompressedOpcode::C2 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
+                C2_Funct3::C_SLLI => Instruction::C_SLLI(self),
+                C2_Funct3::C_LDSP => Instruction::C_LDSP(self),
                 _ => panic!(),
             },
             _ => panic!(),

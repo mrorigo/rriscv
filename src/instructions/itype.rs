@@ -169,6 +169,7 @@ impl Instruction<Itype> {
             },
         }
     }
+
     pub fn SLLIW(args: &Itype) -> Instruction<Itype> {
         Instruction {
             mnemonic: &"SLLIW",
