@@ -34,7 +34,7 @@ impl MemoryRange {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum AddressingMode {
     None = 0,
     SV32 = 1,
@@ -92,7 +92,7 @@ impl MemoryOperations<MMU, u8> for MMU {
     fn write8(&mut self, addr: VAddr, value: u8) -> Option<TrapCause> {
         let resolved = self.translate_address(&addr, MemoryAccessType::WRITE);
         let addr = match resolved {
-            None => return Some(TrapCause::StoreAccessFault),
+            None => return Some(TrapCause::StoreAccessFault(addr)),
             Some(val) => val,
         };
         // for i in 0..self.protected.len() {
@@ -119,7 +119,7 @@ impl MemoryOperations<MMU, u8> for MMU {
     fn read32(&mut self, addr: VAddr) -> Result<u32, TrapCause> {
         let resolved = self.translate_address(&addr, MemoryAccessType::READ);
         let addr = match resolved {
-            None => return Err(TrapCause::StoreAccessFault),
+            None => return Err(TrapCause::LoadAccessFault(addr)),
             Some(val) => val,
         };
 
@@ -136,7 +136,7 @@ impl MemoryOperations<MMU, u8> for MMU {
             //     "{:#x?} is not mapped to memory: {:#x?} - {:#x?}",
             //     addr, self.memory.range.start, self.memory.range.end
             // );
-            return Err(TrapCause::StoreAccessFault);
+            return Err(TrapCause::StoreAccessFault(addr));
         };
         Ok(value.unwrap())
     }
@@ -144,7 +144,7 @@ impl MemoryOperations<MMU, u8> for MMU {
     fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause> {
         let resolved = self.translate_address(&addr, MemoryAccessType::WRITE);
         let addr = match resolved {
-            None => return Some(TrapCause::StoreAccessFault),
+            None => return Some(TrapCause::StoreAccessFault(addr)),
             Some(val) => val,
         };
         if self.memory.includes(addr) {
@@ -234,6 +234,7 @@ impl MMU {
             Xlen::Bits32 => satp & 0x3fffff,
             Xlen::Bits64 => satp & 0xfffffffffff,
         };
+        println!("self.addressing_mode: {:?}", self.addressing_mode);
     }
 
     fn traverse_pagetable(
@@ -363,7 +364,15 @@ impl MMU {
         access_type: MemoryAccessType,
     ) -> Option<PAddr> {
         match self.pmode {
-            PrivMode::Machine => Some(va.address() as PAddr),
+            PrivMode::Machine => match access_type {
+                MemoryAccessType::EXECUTE => Some(va.address() as PAddr),
+                _ => match ((self.mstatus >> 17) & 1) == 0 {
+                    true => Some(va.address() as PAddr),
+                    false => {
+                        panic!("");
+                    }
+                },
+            },
             PrivMode::Supervisor | PrivMode::User => match self.addressing_mode {
                 AddressingMode::None => Some(va.address()),
                 AddressingMode::SV32 => todo!(),

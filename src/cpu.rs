@@ -40,7 +40,7 @@ pub enum TrapCause {
     LoadAddressMisaligned = 4,
     LoadAccessFault(VAddr) = 5,
     StoreAddressMisaligned = 6,
-    StoreAccessFault = 7,
+    StoreAccessFault(VAddr) = 7,
     EnvCallFromUMode = 8,
     EnvCallFromSMode = 9,
     EnvCallFromMMode = 11,
@@ -59,7 +59,7 @@ impl From<TrapCause> for u16 {
             TrapCause::LoadAddressMisaligned => 4,
             TrapCause::LoadAccessFault(_) => 5,
             TrapCause::StoreAddressMisaligned => 6,
-            TrapCause::StoreAccessFault => 7,
+            TrapCause::StoreAccessFault(_) => 7,
             TrapCause::EnvCallFromUMode => 8,
             TrapCause::EnvCallFromSMode => 9,
             TrapCause::EnvCallFromMMode => 11,
@@ -199,7 +199,9 @@ pub struct Core {
     pub prev_pc: u64,
     pub stage: Stage,
     pub cycles: u64,
-    pub debug_cycles: usize,
+    // Debug usage:
+    step_cycles: usize,
+    breakpoint_address: Option<VAddr>,
     pub symbols: HashMap<VAddr, String>,
     pub symboltrace: VecDeque<(VAddr, String)>,
 }
@@ -219,7 +221,8 @@ impl Core {
             pc: 0,
             prev_pc: 0,
             cycles: 0,
-            debug_cycles: 0,
+            step_cycles: 0,
+            breakpoint_address: None,
             wfi: false,
             stage: Stage::FETCH,
             symbols: HashMap::new(),
@@ -277,7 +280,8 @@ impl Core {
         let debugger = Debugger::create();
         match debugger.enter(self, mmu, cause) {
             DebuggerResult::Continue => {}
-            DebuggerResult::Step(_nsteps) => self.debug_cycles = _nsteps,
+            DebuggerResult::ContinueUntil(bp_addr) => self.breakpoint_address = Some(bp_addr),
+            DebuggerResult::Step(_nsteps) => self.step_cycles = _nsteps,
             DebuggerResult::Quit(reason) => panic!("Quitting: {:?}", reason),
         }
     }
@@ -421,10 +425,18 @@ impl Core {
     }
 
     pub fn cycle(&mut self, mmu: &mut MMU) {
-        if self.debug_cycles > 0 {
-            self.debug_cycles = self.debug_cycles - 1;
-            if self.debug_cycles == 0 {
+        if self.step_cycles > 0 {
+            self.step_cycles = self.step_cycles - 1;
+            if self.step_cycles == 0 {
                 self.debug_breakpoint(TrapCause::Breakpoint, mmu);
+            }
+        }
+        match self.breakpoint_address {
+            None => {}
+            Some(addr) => {
+                if self.pc == addr {
+                    self.debug_breakpoint(TrapCause::Breakpoint, mmu);
+                }
             }
         }
         //cpu_trace!(println!("stage: {:?}", self.stage));
@@ -506,7 +518,7 @@ impl Core {
             | TrapCause::LoadAddressMisaligned
             | TrapCause::LoadAccessFault(_)
             | TrapCause::StoreAddressMisaligned
-            | TrapCause::StoreAccessFault
+            | TrapCause::StoreAccessFault(_)
             | TrapCause::EnvCallFromUMode
             | TrapCause::EnvCallFromSMode
             | TrapCause::EnvCallFromMMode
