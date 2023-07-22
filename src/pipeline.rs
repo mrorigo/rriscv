@@ -8,7 +8,8 @@ use crate::{
         decoder::{DecodedInstruction, InstructionDecoder},
         InstructionExcecutor, InstructionSelector,
     },
-    memory::MemoryAccessWidth,
+    memory::{MemoryOperations, RAMOperations},
+    mmu::MMU,
 };
 
 macro_rules! pipeline_trace {
@@ -28,6 +29,14 @@ pub enum MemoryAccess {
     WRITE16(VAddr, u16),
     WRITE32(VAddr, u32),
     WRITE64(VAddr, u64),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum MemoryAccessWidth {
+    BYTE,     // 8 bits
+    HALFWORD, // 16 bits
+    WORD,     // 32 bits
+    LONG,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -66,18 +75,20 @@ impl Stage {
 }
 
 pub trait PipelineStages {
-    fn fetch(&mut self) -> Stage;
+    fn fetch(&mut self, mmu: &mut MMU) -> Stage;
     fn decode(&mut self, instruction: &RawInstruction) -> Stage;
     fn execute(&mut self, decoded: &DecodedInstruction) -> Stage;
-    fn memory(&mut self, memory_access: &MemoryAccess) -> Stage;
+    fn memory(&mut self, mmu: &mut MMU, memory_access: &MemoryAccess) -> Stage;
+
+    //    fn memory(&mut self, memory_access: &MemoryAccess) -> Stage;
     fn writeback(&mut self, writeback: Option<WritebackStage>) -> Stage;
     fn enter_trap(&mut self) -> Stage;
     fn exit_trap(&mut self) -> Stage;
 }
 
-impl PipelineStages for Core<'_> {
-    fn fetch(&mut self) -> Stage {
-        let instruction = self.mmu.read_32(self.pc).unwrap();
+impl PipelineStages for Core {
+    fn fetch(&mut self, mmu: &mut MMU) -> Stage {
+        let instruction = mmu.read_32(self.pc).unwrap();
 
         // Determine if instruction is compressed
         let instruction = match (instruction & 0x3) == 0x03 {
@@ -95,9 +106,9 @@ impl PipelineStages for Core<'_> {
             }
             false => {
                 pipeline_trace!(println!(
-                    "fetch: compressed instruction {:#x?} @ {:#x?}",
+                    "fetch: compressed instruction @ {:#x?}: {:#x?}",
+                    self.pc,
                     instruction & 0xffff,
-                    self.pc
                 ));
                 self.pc += 2;
                 RawInstruction {
@@ -136,11 +147,11 @@ impl PipelineStages for Core<'_> {
         }
     }
 
-    fn memory(&mut self, memory_access: &MemoryAccess) -> Stage {
+    fn memory(&mut self, mmu: &mut MMU, memory_access: &MemoryAccess) -> Stage {
         match *memory_access {
             MemoryAccess::READ8(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
                 register: register,
-                value: self.mmu.read_single(offset).unwrap() as u64,
+                value: mmu.read_single(offset).unwrap() as u64,
             })),
             MemoryAccess::READ16(offset, register) => {
                 todo!()
@@ -151,7 +162,7 @@ impl PipelineStages for Core<'_> {
                 // }))
             }
             MemoryAccess::READ32(offset, register) => {
-                let v = self.mmu.read_32(offset).unwrap();
+                let v = mmu.read_32(offset).unwrap();
                 pipeline_trace!(println!("READ32 @ {:#x?}: {:#?}", offset, v));
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: register,
@@ -159,8 +170,8 @@ impl PipelineStages for Core<'_> {
                 }))
             }
             MemoryAccess::READ64(offset, register) => {
-                let l = self.mmu.read_32(offset).unwrap();
-                let h = self.mmu.read_32(offset + 4).unwrap();
+                let l = mmu.read_32(offset).unwrap();
+                let h = mmu.read_32(offset + 4).unwrap();
                 let value = ((h as u64) << 32) | l as u64;
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: register,
@@ -168,21 +179,21 @@ impl PipelineStages for Core<'_> {
                 }))
             }
             MemoryAccess::WRITE8(offset, value) => {
-                self.mmu.write_single(offset, value);
+                mmu.write_single(offset, value);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE16(offset, value) => {
-                self.mmu.write_single(offset + 1, (value & 0xff) as u8);
-                self.mmu.write_single(offset, (value >> 8) as u8);
+                mmu.write_single(offset + 1, (value & 0xff) as u8);
+                mmu.write_single(offset, (value >> 8) as u8);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE32(offset, value) => {
-                self.mmu.write_32(offset, value);
+                mmu.write_32(offset, value);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE64(offset, value) => {
-                self.mmu.write_32(offset, value as u32);
-                self.mmu.write_32(offset + 4, (value >> 32) as u32);
+                mmu.write_32(offset, value as u32);
+                mmu.write_32(offset + 4, (value >> 32) as u32);
                 // pipeline_trace!(println!("memory::WRITE64: {:#x?} @ {:#x?}", value, offset));
                 // self.mmu
                 //     .write_single(offset, value as u64, MemoryAccessWidth::LONG);

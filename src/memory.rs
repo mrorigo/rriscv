@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::mem;
 use std::ptr;
 
@@ -5,14 +6,6 @@ use elfloader::VAddr;
 
 // type VAddr = u64;
 // type PAddr = u64;
-
-#[derive(Debug, Copy, Clone)]
-pub enum MemoryAccessWidth {
-    BYTE,     // 8 bits
-    HALFWORD, // 16 bits
-    WORD,     // 32 bits
-    LONG,
-}
 
 #[derive(Debug, Copy, Clone)]
 pub struct RAM {
@@ -30,6 +23,8 @@ pub trait MemoryOperations<T, T2>: std::fmt::Debug {
 }
 
 pub trait RAMOperations<T>: MemoryOperations<T, u8> {
+    fn as_any(&self) -> &dyn Any;
+
     fn read_32(&self, addr: VAddr) -> Option<u32> {
         // @FIXME: We allow 16-bit aligned access, because instruction fetches are 16-bit aligned
         debug_assert!(

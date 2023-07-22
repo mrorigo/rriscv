@@ -1,4 +1,4 @@
-use std::cell::Ref;
+use std::{any::Any, cell::Ref};
 
 use elfloader::{PAddr, VAddr};
 use include_bytes_aligned::include_bytes_aligned;
@@ -44,11 +44,12 @@ pub struct MMU {
 }
 
 impl MemoryOperations<MMU, u8> for MMU {
+    // @TODO: Optimize this?
     fn read_single(&self, addr: VAddr) -> Option<u8> {
         if self.memory.includes(addr) {
             self.memory.read_single(addr)
         } else if self.uart.includes(addr) {
-            todo!("UART I/O")
+            Some(self.uart.read(addr))
         } else if self.clint.includes(addr) {
             self.clint.read_single(addr)
         } else if self.plic.includes(addr) {
@@ -60,11 +61,12 @@ impl MemoryOperations<MMU, u8> for MMU {
         }
     }
 
+    // @TODO: Optimize this?
     fn write_single(&mut self, addr: VAddr, value: u8) -> bool {
         if self.memory.includes(addr) {
             self.memory.write_single(addr, value)
         } else if self.uart.includes(addr) {
-            todo!("UART I/O")
+            self.uart.write(addr, value)
         } else if self.clint.includes(addr) {
             self.clint.write_single(addr, value)
         } else if self.plic.includes(addr) {
@@ -77,7 +79,11 @@ impl MemoryOperations<MMU, u8> for MMU {
     }
 }
 
-impl RAMOperations<MMU> for MMU {}
+impl RAMOperations<MMU> for MMU {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
 
 impl MMU {
     pub fn create() -> MMU {
@@ -102,24 +108,9 @@ impl MMU {
         }
     }
 
-    pub fn map_address(&self, vaddr: VAddr) -> PAddr {
-        // match self.find_device(vaddr) {
-        //     Some(device) => todo!(),
-        //     None => panic!("MMU::map_address::Unmappable VAddr: {}", vaddr),
-        // }
-        0
+    pub fn tick(&mut self) {
+        self.uart.tick();
     }
-
-    // fn find_device(&self, vaddr: VAddr) -> Option<&MMIODevice> {
-    //     let mut val: Option<&MMIODevice> = None;
-    //     for i in 0..self.device_table.len() {
-    //         if self.device_table[i].start >= vaddr && vaddr < self.device_table[i].end {
-    //             val = Some(&self.device_table[i]);
-    //             break;
-    //         }
-    //     }
-    //     val
-    // }
 
     fn parse_dtb() -> Vec<MemoryRange> {
         let mut devs = Vec::<MemoryRange>::new();

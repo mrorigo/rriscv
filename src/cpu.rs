@@ -1,3 +1,6 @@
+use std::borrow::BorrowMut;
+use std::cell::RefCell;
+
 use crate::memory::{MemoryOperations, RAMOperations};
 use crate::mmu::MMU;
 use crate::pipeline::{PipelineStages, Stage};
@@ -99,21 +102,23 @@ pub enum CSRRegister {
 }
 
 //#[derive(Debug)]
-pub struct Core<'a> {
+pub struct Core {
     pub id: u64,
     pub xlen: Xlen,
     registers: Registers,
     csrs: CSRRegisters,
     pmode: PrivMode,
-    pub mmu: &'a mut dyn RAMOperations<MMU>,
+    //    pub mmu: RefCell<&'a mut dyn RAMOperations<MMU>>,
     pub pc: u64,
     pub prev_pc: u64,
     pub stage: Stage,
     pub cycles: u64,
 }
 
-impl<'a> Core<'a> {
-    pub fn create(id: u64, mmu: &'a mut impl RAMOperations<MMU>) -> Core<'a> {
+impl Core {
+    //    pub fn create(id: u64, mmu: RefCell<&'a mut impl RAMOperations<MMU>>) -> Core<'a> {
+    //        pub fn create(id: u64, mmu: RefCell<&'a mut impl RAMOperations<MMU>>) -> Core<'a> {
+    pub fn create(id: u64) -> Core {
         let registers: [RegisterValue; 32] = [0; 32];
         let mut csrs: [RegisterValue; 4096] = [0; 4096];
         csrs[CSRRegister::mhartid as usize] = id;
@@ -124,7 +129,7 @@ impl<'a> Core<'a> {
             registers,
             csrs,
             pmode: PrivMode::Machine,
-            mmu,
+            //mmu,
             pc: 0,
             prev_pc: 0,
             cycles: 0,
@@ -205,14 +210,14 @@ impl<'a> Core<'a> {
         }
     }
 
-    pub fn cycle(&mut self) {
+    pub fn cycle(&mut self, mmu: &mut MMU) {
         self.stage = match self.stage {
             Stage::ENTER_TRAP => self.enter_trap(),
             Stage::EXIT_TRAP => self.exit_trap(),
-            Stage::FETCH => self.fetch(),
+            Stage::FETCH => self.fetch(mmu),
             Stage::DECODE(instruction) => self.decode(&instruction),
             Stage::EXECUTE(decoded) => self.execute(&decoded),
-            Stage::MEMORY(memory_access) => self.memory(&memory_access),
+            Stage::MEMORY(memory_access) => self.memory(mmu, &memory_access),
             Stage::WRITEBACK(writeback) => self.writeback(writeback),
         };
     }
