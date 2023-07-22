@@ -195,17 +195,17 @@ impl PipelineStages for Core {
                 //     value: v as u64,
                 // }))
             }
-            MemoryAccess::READ32(offset, register, sign_extend) => {
-                let value = mmu.read_32(offset).unwrap();
-                // pipeline_trace!(println!("m:    READ32 @ {:#x?}: {:#x?}", offset, value));
-                Stage::WRITEBACK(Some(WritebackStage {
+            MemoryAccess::READ32(offset, register, sign_extend) => match mmu.read_32(offset) {
+                Ok(value) => Stage::WRITEBACK(Some(WritebackStage {
                     register: register,
                     value: match sign_extend {
                         true => value as i32 as i64 as u64,
                         false => (value & 0xffffffff) as u64,
                     },
-                }))
-            }
+                })),
+                Err(cause) => Stage::TRAP(cause),
+            },
+
             MemoryAccess::READ64(offset, register, sign_extend) => {
                 let l = match mmu.read_32(offset) {
                     Err(cause) => return Stage::TRAP(cause),
@@ -303,6 +303,7 @@ impl PipelineStages for Core {
             TrapCause::MachineTimerIrq => Some(MipMask::MTIP),
             _ => None,
         };
+        println!("TRAP: {:#x?} @ {:#x?}", cause, self.prev_pc);
 
         let is_interrupt = mip_mask.is_some();
 
