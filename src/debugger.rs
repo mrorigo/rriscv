@@ -1,17 +1,19 @@
 use elfloader::VAddr;
 use rustyline::error::ReadlineError;
-use rustyline::{Editor, Result};
+use rustyline::Result;
 
 use crate::cpu::{CSRRegister, Core, Register, TrapCause, CYCLES_PER_INSTRUCTION};
 use crate::disassembler::Disassembler;
 use crate::memory::MemoryOperations;
 use crate::mmu::MMU;
+use crate::pipeline::RawInstruction;
 
 pub struct Debugger {}
 
 pub enum DebuggerResult {
     Step(usize),
     Continue,
+    ContinueUntil(VAddr),
     Quit(String),
 }
 
@@ -21,13 +23,29 @@ impl Debugger {
     }
 
     pub fn enter(&self, core: &mut Core, mmu: &mut MMU, cause: TrapCause) -> DebuggerResult {
-        println!("----- DEBUG BREAKPOIINT: HALTING CPU\nCause: {:?}", cause);
+        println!("----- DEBUG BREAKPOINT: HALTING CPU\nCause: {:?}", cause);
 
         self.dump_status(core, mmu);
 
         match self.main(core, mmu) {
             Ok(result) => result,
             Err(er) => DebuggerResult::Quit(er.to_string()),
+        }
+    }
+
+    fn parse_addr(core: &Core, s: &str) -> Option<VAddr> {
+        match s {
+            "pc" => Some(core.pc()),
+            "mepc" => Some(core.read_csr(CSRRegister::mepc)),
+            "sepc" => Some(core.read_csr(CSRRegister::sepc)),
+            "sp" => Some(core.read_register(2)),
+            _ => match u64::from_str_radix(s.trim_start_matches("0x"), 16) {
+                Ok(val) => Some(val),
+                Err(err) => {
+                    println!("Debugger: Error: Invalid address {:#x?}: {:#?} ", s, err);
+                    None
+                }
+            },
         }
     }
 
@@ -56,21 +74,54 @@ impl Debugger {
                                 }
                                 None
                             }
+                            "d" => {
+                                let addr = match split.len() > 0 {
+                                    true => Debugger::parse_addr(core, split[1]),
+                                    false => {
+                                        println!("Debugger: Error: No address supplied");
+                                        None
+                                    }
+                                };
+
+                                match addr {
+                                    Some(addr) => {
+                                        let mut offs = 0;
+                                        for i in 0..10 {
+                                            let word = mmu.read32(addr.wrapping_add(offs));
+
+                                            let poffs = offs;
+                                            let s = match word {
+                                                Ok(word) => {
+                                                    let raw = RawInstruction::from_word(word, 0);
+                                                    offs += raw.size_in_bytes();
+                                                    Disassembler::disassemble(word, core.xlen)
+                                                }
+                                                Err(_) => String::from("Invalid Address"),
+                                            };
+                                            println!("{:#x?}: {:?}", addr.wrapping_add(poffs), s);
+                                        }
+                                        None
+                                    }
+                                    None => None,
+                                }
+                            }
+                            "b" => {
+                                let addr = match split.len() > 0 {
+                                    true => Debugger::parse_addr(core, split[1]),
+                                    false => {
+                                        println!("Debugger: Error: No address supplied");
+                                        None
+                                    }
+                                };
+
+                                match addr {
+                                    Some(addr) => Some(DebuggerResult::ContinueUntil(addr)),
+                                    None => None,
+                                }
+                            }
                             "m" => {
                                 let addr = match split.len() > 0 {
-                                    true => match split[1] {
-                                        "pc" => Some(core.pc()),
-                                        "mepc" => Some(core.read_csr(CSRRegister::mepc)),
-                                        "sepc" => Some(core.read_csr(CSRRegister::sepc)),
-                                        "sp" => Some(core.read_register(2)),
-                                        _ => match u64::from_str_radix(split[1], 16) {
-                                            Ok(val) => Some(val),
-                                            Err(err) => {
-                                                println!("Debugger: Error: Invalid address {:#x?}: {:#?} ", split[1], err);
-                                                None
-                                            }
-                                        },
-                                    },
+                                    true => Debugger::parse_addr(core, split[1]),
                                     false => {
                                         println!("Debugger: Error: No address supplied");
                                         None
