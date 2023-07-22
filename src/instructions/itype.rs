@@ -496,6 +496,17 @@ impl Instruction<Itype> {
         }
     }
 
+    pub fn SFENCE_WMA(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: "SFENCE.VMA",
+            args: Some(*args),
+            funct: |_core, _args| {
+                // NOP for now
+                Stage::WRITEBACK(None)
+            },
+        }
+    }
+
     pub fn MRET(args: &Itype) -> Instruction<Itype> {
         Instruction {
             mnemonic: "MRET",
@@ -572,10 +583,11 @@ impl InstructionSelector<Itype> for Itype {
                 CSR_Funct3::CSRRW => Instruction::CSRRW(self),
                 CSR_Funct3::CSRWI => Instruction::CSRWI(self),
                 CSR_Funct3::CSRRC => Instruction::CSRRC(self),
-                CSR_Funct3::ECALL_EBREAK_MRET => match self.imm12 {
-                    0 => todo!("ECALL"),
-                    1 => Instruction::EBREAK(self),
-                    _ => Instruction::MRET(self),
+                CSR_Funct3::ECALL_EBREAK_MRET => match self.funct7 {
+                    Funct7::B0001000 => todo!("SRET"),
+                    Funct7::B0011000 => Instruction::MRET(self),
+                    Funct7::B0001001 => Instruction::SFENCE_WMA(self),
+                    _ => Instruction::EBREAK(self),
                 },
                 _ => panic!("Unknown SYSTEM instruction"),
             },

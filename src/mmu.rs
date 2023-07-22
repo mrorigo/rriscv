@@ -89,6 +89,8 @@ impl MemoryOperations<MMU, u8> for MMU {
             self.memory.read32(addr)
         } else if self.clint.includes(addr) {
             self.clint.read32(addr)
+        } else if self.plic.includes(addr) {
+            self.plic.read32(addr)
         } else {
             panic!("read32 only supported for RAM memory, tried {:#x?}", addr)
         }
@@ -99,6 +101,8 @@ impl MemoryOperations<MMU, u8> for MMU {
             self.memory.write32(addr, value)
         } else if self.clint.includes(addr) {
             self.clint.write32(addr, value)
+        } else if self.plic.includes(addr) {
+            self.plic.write32(addr, value)
         } else {
             panic!(
                 "write32 only supported for CLINT & RAM memory: {:#x?}",

@@ -116,7 +116,7 @@ pub const FORMAT_MAP: [InstructionFormat; 128] = [
     InstructionFormat::Unknown, /*1110000 */
     InstructionFormat::Unknown, /*1110001 */
     InstructionFormat::Unknown, /*1110010 */
-    InstructionFormat::I,       /*1110011 = CSR* */
+    InstructionFormat::I,       /*1110011 = CSR* / SFENCE.VMA */
     InstructionFormat::Unknown, /*1110100 */
     InstructionFormat::Unknown, /*1110101 */
     InstructionFormat::Unknown, /*1110110 */

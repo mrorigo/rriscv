@@ -352,6 +352,24 @@ impl VirtualDevice for PLIC {
     }
 }
 
+impl MemoryOperations<PLIC, u8> for PLIC {
+    fn read8(&self, addr: VAddr) -> Option<u8> {
+        self.ram.read8(addr)
+    }
+
+    fn write8(&mut self, addr: VAddr, value: u8) -> bool {
+        self.ram.write8(addr, value)
+    }
+
+    fn read32(&self, addr: VAddr) -> Option<u32> {
+        self.ram.read32(addr)
+    }
+
+    fn write32(&mut self, addr: VAddr, value: u32) {
+        self.ram.write32(addr, value)
+    }
+}
+
 impl MemoryOperations<CLINT, u8> for CLINT {
     fn read8(&self, addr: VAddr) -> Option<u8> {
         self.ram.read8(addr)

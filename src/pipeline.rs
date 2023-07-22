@@ -13,8 +13,8 @@ use crate::{
 
 macro_rules! pipeline_trace {
     ($instr:expr) => {
-        print!("P: ");
-        $instr;
+        // print!("P: ");
+        // $instr;
     };
 }
 

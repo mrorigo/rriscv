@@ -5,8 +5,8 @@ use crate::{
 
 macro_rules! instruction_trace {
     ($instr:expr) => {
-        print!("P:x: ");
-        $instr;
+        // print!("P:x: ");
+        // $instr;
     };
 }
 

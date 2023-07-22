@@ -358,7 +358,7 @@ impl InstructionSelector<Rtype> for Rtype {
                     Op_Funct3::SLL => Instruction::SLL(self),
                     Op_Funct3::SLT => Instruction::SLT(self),
                 },
-                // _ => todo!("R-type Funct7 not supported"),
+                _ => todo!("R-type Funct7 not supported"),
             },
             _ => panic!(),
         }
