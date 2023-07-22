@@ -97,13 +97,27 @@ pub struct VirtioBlockDisk {
 
 pub struct VIRTIO {
     range: MemoryRange,
+    memory: MemoryWrapper,
     device: VirtioBlockDisk,
 }
 
 impl VIRTIO {
     pub fn create(range: MemoryRange) -> VIRTIO {
         let device = VirtioBlockDisk::new();
-        VIRTIO { range, device }
+        let memory = MemoryWrapper::new(range.start, (range.end - range.start) as usize);
+        VIRTIO {
+            range,
+            device,
+            memory,
+        }
+    }
+
+    pub fn load_fs(&mut self, contents: Vec<u8>) {
+        self.device.init(contents);
+    }
+
+    pub fn tick(&mut self) {
+        self.device.tick(&mut self.memory);
     }
 }
 
@@ -134,11 +148,22 @@ impl MemoryOperations<VIRTIO, u8> for VIRTIO {
     }
 
     fn read32(&self, addr: VAddr) -> Option<u32> {
-        todo!("virtio.read32(addr)");
+        let b0 = self.device.load(addr) as u32;
+        let b1 = self.device.load(addr + 1) as u32;
+        let b2 = self.device.load(addr + 2) as u32;
+        let b3 = self.device.load(addr + 3) as u32;
+        let val = b0 | b1 << 8 | b2 << 16 | b3 << 24;
+        println!("VIRTIO READ32 {:#x?} => {:#x?}", addr, val);
+        Some(val)
     }
 
     fn write32(&mut self, addr: VAddr, value: u32) {
-        todo!("virtio.write32(addr, value)");
+        println!("VIRTIO WRITE32 {:#x?} => {:#x?}", addr, value);
+        // todo!("virtio.write32(addr, value)");
+        self.device.store(addr + 0, (value & 0xff) as u8);
+        self.device.store(addr + 1, ((value >> 8) & 0xff) as u8);
+        self.device.store(addr + 2, ((value >> 16) & 0xff) as u8);
+        self.device.store(addr + 3, ((value >> 24) & 0xff) as u8);
     }
 
     fn read64(&self, addr: VAddr) -> Option<u64> {
@@ -158,6 +183,7 @@ impl MemoryOperations<VIRTIO, u8> for VIRTIO {
     }
 }
 
+// Mostly ripped from https://github.com/takahirox/riscv-rust/blob/master/src/device/virtio_block_disk.rs
 impl VirtioBlockDisk {
     /// Creates a new `VirtioBlockDisk`.
     pub fn new() -> Self {
@@ -226,7 +252,7 @@ impl VirtioBlockDisk {
     ///
     /// # Arguments
     /// * `address`
-    pub fn load(&mut self, address: u64) -> u8 {
+    pub fn load(&self, address: u64) -> u8 {
         //println!("Disk Load AD:{:X}", address);
         match address {
             // Magic number: 0x74726976
@@ -234,8 +260,8 @@ impl VirtioBlockDisk {
             0x10001001 => 0x69,
             0x10001002 => 0x72,
             0x10001003 => 0x74,
-            // Device version: 1 (Legacy device)
-            0x10001004 => 1,
+            // Device version: 2 (WAS:) 1 (Legacy device))
+            0x10001004 => 2,
             // Virtio Subsystem Device id: 2 (Block device)
             0x10001008 => 2,
             // Virtio Subsystem Vendor id: 0x554d4551

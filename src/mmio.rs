@@ -45,21 +45,21 @@ impl CLINT {
     }
 
     pub fn tick(&mut self) {
-        let h = self
-            .read32(CLINT::CLINT_MTIME as VAddr + 4 + self.range.start)
-            .unwrap();
         let l = self
             .read32(CLINT::CLINT_MTIME as VAddr + 0 + self.range.start)
             .unwrap();
 
         if l.wrapping_add(1) < l {
+            let h = self
+                .read32(CLINT::CLINT_MTIME as VAddr + 4 + self.range.start)
+                .unwrap();
             self.write32(
                 CLINT::CLINT_MTIME as VAddr + 4 + self.range.start,
                 h.wrapping_add(1),
             );
         }
-        if l % 1000000 == 0 {
-            println!("CLINT:MTIME: {:#?} / {:#?}", l, h);
+        if l % 10000000 == 0 {
+            println!("CLINT:MTIME: {:#?}", l);
         }
 
         self.write32(

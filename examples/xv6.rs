@@ -4,7 +4,8 @@ use elfloader::{ElfBinary, VAddr};
 use rriscv::{
     cpu::{self},
     elf,
-    mmu::MMU,
+    memory::MemoryOperations,
+    mmu::{MemoryRange, MMU},
     pipeline::Stage,
 };
 
@@ -13,27 +14,26 @@ fn main() {
     use std::fs;
 
     let vbase: u64 = 0x8000_0000;
-    // let clint_base = 0x2000000;
-    // let plic_base = 0x0c000000;
 
     let mmu = MMU::create();
     println!("DTB Device Table:");
     mmu.dump_device_table();
 
     let mmu = &mut MMU::create();
-    // memory.add_segment(vbase, 138560);
-    // memory.add_segment(clint_base, 0xc000);
-    // memory.add_segment(plic_base, 0x200000 + 0x2000 * 8);
 
-    //    let binary_blob = fs::read("examples/xv6/kernel.min").expect("Can't read kernel binary");
-    let binary_blob = fs::read("examples/xv6/kernel.min").expect("Can't read kernel binary");
-    //let binary_blob = fs::read("./test").expect("Can't read kernel binary");
+    let fs_contents = fs::read("examples/xv6/fs.img").expect("Can't read xv6 fs images");
+    println!(
+        "Virtio filesystem initialized ({} bytes)",
+        fs_contents.len()
+    );
+    mmu.virtio_mut().load_fs(fs_contents);
+
+    let binary_blob = fs::read("examples/xv6/kernel.min").expect("Can't read xv6 kernel binary");
     let binary = ElfBinary::new(binary_blob.as_slice()).expect("Got proper ELF file");
     let mut loader = elf::Loader::create(vbase, mmu);
     binary.load(&mut loader).expect("Can't load the binary?");
 
     let mut symbols: HashMap<u64, &str> = HashMap::new();
-
     binary
         .for_each_symbol(|sym| {
             if sym.name() != 0 {
@@ -50,6 +50,12 @@ fn main() {
     for sym in symbols.iter() {
         cpu.add_symbol(*sym.0 as VAddr, sym.1.to_string());
     }
+
+    mmu.protect_range(MemoryRange {
+        name: "code",
+        start: 0x80000000,
+        end: 0x80004000,
+    });
 
     loop {
         cpu.cycle(mmu);

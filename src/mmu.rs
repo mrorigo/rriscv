@@ -117,19 +117,19 @@ impl MemoryOperations<MMU, u8> for MMU {
         }
     }
 
-    fn read64(&self, addr: VAddr) -> Option<u64> {
+    fn read64(&self, _addr: VAddr) -> Option<u64> {
         todo!()
     }
 
-    fn write64(&mut self, addr: VAddr, value: u64) {
+    fn write64(&mut self, _addr: VAddr, _value: u64) {
         todo!()
     }
 
-    fn read16(&self, addr: VAddr) -> Option<u16> {
+    fn read16(&self, _addr: VAddr) -> Option<u16> {
         todo!()
     }
 
-    fn write16(&mut self, addr: VAddr, value: u16) {
+    fn write16(&mut self, _addr: VAddr, _value: u16) {
         todo!()
     }
 }
@@ -158,6 +158,10 @@ impl MMU {
             protected: Vec::new(),
             device_table,
         }
+    }
+
+    pub fn virtio_mut(&mut self) -> &mut VIRTIO {
+        return &mut self.virtio;
     }
 
     pub fn tick(&mut self) {
