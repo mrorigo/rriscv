@@ -31,6 +31,7 @@ impl ImmediateDecoder<u16, u8> for CStype {
         (((i >> 7) & 0x38) | ((i << 1) & 0xc0)) as u8
     }
 }
+
 impl CompressedFormatType for CStype {}
 impl CompressedFormatDecoder<CStype> for CStype {
     fn decode(word: u16) -> CStype {
@@ -69,10 +70,7 @@ impl Instruction<CStype> {
                 let rs2v = core.read_register(args.rs2);
                 let value = rs1v & rs2v;
                 //                debug_trace!(println!("C.AND x{},x{}", args.rs1_rd, args.rs2));
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rs1_rd,
-                    value,
-                }))
+                Stage::writeback(args.rs1_rd, value)
             },
         }
     }
@@ -86,10 +84,7 @@ impl Instruction<CStype> {
                 let rs2v = core.read_register(args.rs2);
                 let value = rs1v | rs2v;
                 //                debug_trace!(println!("C.OR x{},x{}", args.rs1_rd, args.rs2));
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rs1_rd,
-                    value,
-                }))
+                Stage::writeback(args.rs1_rd, value)
             },
         }
     }
@@ -101,10 +96,7 @@ impl Instruction<CStype> {
             funct: |core, args| {
                 let rs1v = core.read_register(args.rs1_rd);
                 let value = rs1v >> args.shamt;
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rs1_rd,
-                    value,
-                }))
+                Stage::writeback(args.rs1_rd, value)
             },
         }
     }
@@ -117,10 +109,7 @@ impl Instruction<CStype> {
                 let rs1v = core.read_register(args.rs1_rd);
                 let rs2v = core.read_register(args.rs2);
                 let value = todo!();
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rs1_rd,
-                    value,
-                }))
+                Stage::writeback(args.rs1_rd, value)
             },
         }
     }
@@ -133,7 +122,6 @@ impl Instruction<CStype> {
                 let rs1v = core.read_register(args.rs1_rd);
                 let rs2v = core.read_register(args.rs2);
                 let addr = rs1v + (args.offset as u64);
-                debug_trace!(println!("rs1v: {:#x?}", rs1v));
 
                 Stage::MEMORY(MemoryAccess::WRITE64(addr, rs2v))
             },

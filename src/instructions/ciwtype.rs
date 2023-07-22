@@ -24,13 +24,11 @@ impl CompressedFormatType for CIWtype {}
 
 impl CompressedFormatDecoder<CIWtype> for CIWtype {
     fn decode(word: u16) -> CIWtype {
-        let funct3 = num::FromPrimitive::from_u8(((word >> 13) & 0x7) as u8).unwrap();
-        let opcode = num::FromPrimitive::from_u8((word & 3) as u8).unwrap();
         CIWtype {
-            opcode,
+            opcode: num::FromPrimitive::from_u8((word & 3) as u8).unwrap(),
             imm: ((word >> 5) as u16) & ((1 << 7) - 1),
             rd: ((word >> 2) & 7) as Register + 8,
-            funct3,
+            funct3: num::FromPrimitive::from_u8(((word >> 13) & 0x7) as u8).unwrap(),
         }
     }
 }
@@ -57,10 +55,7 @@ impl Instruction<CIWtype> {
                 let sp = core.read_register(2);
                 let value = sp + args.imm as u64;
                 debug_assert!(args.imm != 0);
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rd,
-                    value,
-                }))
+                Stage::writeback(args.rd, value)
             },
         }
     }

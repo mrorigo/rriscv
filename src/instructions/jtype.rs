@@ -37,15 +37,11 @@ impl Instruction<Jtype> {
                 const M: u32 = 1 << (20 - 1);
                 let se_imm20 = ((args.imm20 << 1) ^ M) - M;
                 let target = core.prev_pc + se_imm20 as u64;
-                //println!("JAL: core.pc: {:#x?}  se_imm20: {:#x?}", core.pc, se_imm20);
                 core.set_pc(target);
 
-                debug_trace!(println!("JAL {:#x?}", target));
+                //                debug_trace!(println!("JAL {:#x?}", target));
 
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rd,
-                    value: core.pc,
-                }))
+                Stage::writeback(args.rd, core.pc)
             },
         }
     }

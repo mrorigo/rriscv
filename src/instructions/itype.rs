@@ -45,7 +45,7 @@ impl Instruction<Itype> {
             funct: |core, args| {
                 let csr_register = num::FromPrimitive::from_u16(args.imm12).unwrap();
                 // "If rd=x0, then the instruction shall not read the CSR"
-                let csrv = if args.rd != 0 {
+                let value = if args.rd != 0 {
                     Some(core.read_csr(csr_register))
                 } else {
                     None
@@ -54,13 +54,10 @@ impl Instruction<Itype> {
                 let rs1v = core.read_register(args.rs1);
                 core.write_csr(csr_register, rs1v);
 
-                if csrv.is_none() {
+                if value.is_none() {
                     Stage::WRITEBACK(None)
                 } else {
-                    Stage::WRITEBACK(Some(WritebackStage {
-                        register: args.rd,
-                        value: csrv.unwrap(),
-                    }))
+                    Stage::writeback(args.rd, value.unwrap())
                 }
             },
         }
@@ -72,15 +69,12 @@ impl Instruction<Itype> {
             args: Some(*args),
             funct: |core, args| {
                 let csr_register = num::FromPrimitive::from_u16(args.imm12).unwrap();
-                let csrv = core.read_csr(csr_register);
+                let value = core.read_csr(csr_register);
                 if args.rs1 != 0 {
                     let rs1v = core.read_register(args.rs1);
-                    core.write_csr(csr_register, csrv | rs1v);
+                    core.write_csr(csr_register, value | rs1v);
                 }
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rd,
-                    value: csrv,
-                }))
+                Stage::writeback(args.rd, value)
             },
         }
     }
@@ -97,10 +91,7 @@ impl Instruction<Itype> {
                 //     "ADDI x{}, x{}, {}  ; x{} = {:#x?}",
                 //     args.rd, args.rs1, seimm as i64, args.rd, value
                 // ));
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rd,
-                    value,
-                }))
+                Stage::writeback(args.rd, value)
             },
         }
     }
@@ -117,10 +108,7 @@ impl Instruction<Itype> {
                     "ADDIW x{}, x{}, {}  ; x{} = {:#x?}",
                     args.rd, args.rs1, seimm as i64, args.rd, value
                 ));
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rd,
-                    value,
-                }))
+                Stage::writeback(args.rd, value)
             },
         }
     }
@@ -137,10 +125,7 @@ impl Instruction<Itype> {
                     "ORI x{}, x{}, {:#x?}  ; x{} = {:#x?}",
                     args.rd, args.rs1, seimm as u64, args.rd, value
                 ));
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rd,
-                    value,
-                }))
+                Stage::writeback(args.rd, value)
             },
         }
     }
@@ -159,10 +144,7 @@ impl Instruction<Itype> {
                 core.set_pc(target);
 
                 if args.rd != 0 {
-                    Stage::WRITEBACK(Some(WritebackStage {
-                        register: args.rd,
-                        value,
-                    }))
+                    Stage::writeback(args.rd, value)
                 } else {
                     Stage::WRITEBACK(None)
                 }
@@ -179,10 +161,7 @@ impl Instruction<Itype> {
                 // the shift amount is encoded in the lower 6 bits of the I-immediate field for RV64I.
                 let shamt = args.imm12 & 0b111111;
                 let value = ((rs1v as i64) << shamt) as i32 as u64;
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rd,
-                    value,
-                }))
+                Stage::writeback(args.rd, value)
             },
         }
     }

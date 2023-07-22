@@ -1,7 +1,7 @@
 use elfloader::VAddr;
 
 use crate::{
-    cpu::{CSRRegister, Core, PrivMode, Register},
+    cpu::{CSRRegister, Core, PrivMode, Register, RegisterValue},
     instructions::{
         decoder::{DecodedInstruction, InstructionDecoder},
         InstructionExcecutor, InstructionSelector,
@@ -44,6 +44,12 @@ pub enum Stage {
     EXECUTE(DecodedInstruction),       // May be skipped (by eg NOP)
     MEMORY(MemoryAccess),              // May be skipped
     WRITEBACK(Option<WritebackStage>), // This stage is ALWAYS executed
+}
+
+impl Stage {
+    pub fn writeback(register: Register, value: RegisterValue) -> Stage {
+        Stage::WRITEBACK(Some(WritebackStage { register, value }))
+    }
 }
 
 pub trait PipelineStages {

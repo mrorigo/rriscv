@@ -42,10 +42,8 @@ impl Instruction<CRtype> {
             funct: |core, args| {
                 let rs1v = core.read_register(args.rs1_rd);
                 let rs2v = core.read_register(args.rs2);
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rs1_rd,
-                    value: core.bit_extend(rs1v.wrapping_add(rs2v) as i64) as u64,
-                }))
+                let value = core.bit_extend(rs1v.wrapping_add(rs2v) as i64) as u64;
+                Stage::writeback(args.rs1_rd, value)
             },
         }
     }

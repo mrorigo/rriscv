@@ -4,7 +4,7 @@ use quark::Signs;
 
 use crate::{
     cpu::{Core, Register, Xlen},
-    pipeline::{Stage, WritebackStage},
+    pipeline::Stage,
 };
 
 use super::{
@@ -55,10 +55,7 @@ impl Instruction<CItype> {
                     "C.LUI x{}, {:#x?} ; x{} = {:#x?}",
                     args.rd, args.imm, args.rd, value
                 ));
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rd,
-                    value,
-                }))
+                Stage::writeback(args.rd, value)
             },
         }
     }
@@ -68,12 +65,11 @@ impl Instruction<CItype> {
             mnemonic: "C.ADDI",
             args: Some(*args),
             funct: |core, args| {
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rd,
-                    value: core
-                        .read_register(args.rd)
-                        .wrapping_add((args.imm as u64).sign_extend(64 - 12)),
-                }))
+                let value = core
+                    .read_register(args.rd)
+                    .wrapping_add((args.imm as u64).sign_extend(64 - 12));
+
+                Stage::writeback(args.rd, value)
             },
         }
     }
@@ -84,10 +80,7 @@ impl Instruction<CItype> {
             args: Some(*args),
             funct: |core, args| {
                 let value = (args.imm as u64).sign_extend(64 - 6);
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rd,
-                    value: value,
-                }))
+                Stage::writeback(args.rd, value)
             },
         }
     }

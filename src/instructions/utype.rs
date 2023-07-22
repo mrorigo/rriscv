@@ -54,10 +54,7 @@ impl Instruction<Utype> {
                     "AUIPC x{}, {:#x?}\t; x{}={:#x?}",
                     args.rd, args.imm20, args.rd, value
                 ));
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rd,
-                    value,
-                }))
+                Stage::writeback(args.rd, value)
             },
         }
     }
@@ -68,10 +65,8 @@ impl Instruction<Utype> {
             mnemonic: "LUI",
             args: Some(*utype),
             funct: |core, args| {
-                Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rd,
-                    value: (args.imm20 as u64) << 12,
-                }))
+                let value = (args.imm20 as u64) << 12;
+                Stage::writeback(args.rd, value)
             },
         }
     }
