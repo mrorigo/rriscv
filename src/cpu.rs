@@ -4,8 +4,9 @@ use crate::decoder::{DecodedInstruction, InstructionDecoder};
 
 use crate::memory::{Memory, MemoryAccessWidth, MemoryOperations};
 use crate::opcodes::{self, OpCodes};
-use crate::optypes::OpType;
+use crate::optypes::InstructionFormat;
 use elfloader::ElfLoader;
+use quark::Signs;
 
 #[derive(Copy, Clone, Debug)]
 pub enum PrivMode {
@@ -14,10 +15,11 @@ pub enum PrivMode {
     Machine,
 }
 
-pub type Register = u64;
+pub type Register = u8;
+pub type RegisterValue = u64;
 
-type Registers = [Register; 32];
-type CSRRegisters = [Register; 4096];
+type Registers = [RegisterValue; 32];
+type CSRRegisters = [RegisterValue; 4096];
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Copy, Clone, FromPrimitive)]
@@ -59,7 +61,7 @@ pub struct Core<'a> {
     pub registers: Registers,
     pub csrs: CSRRegisters,
     pub pmode: PrivMode,
-    pub memory: &'a dyn MemoryOperations,
+    pub memory: &'a mut dyn MemoryOperations,
     pub pc: u64,
     pub prev_pc: u64,
     pub cycles: u64,
@@ -71,13 +73,15 @@ pub struct Pipeline {
     pub stage: Stage,
     pub instruction: (bool, u32),
     pub decoded: Option<DecodedInstruction>,
+    pub memory_access_width: MemoryAccessWidth, // FIXME: Default?
     pub reg_out: Option<(Register, u64)>,
+    pub rs2v: u64,
 }
 
 impl<'a> Core<'a> {
-    pub fn create(id: u64, memory: &'a impl MemoryOperations) -> Core<'a> {
-        let registers: [Register; 32] = [0; 32];
-        let mut csrs: [Register; 4096] = [0; 4096];
+    pub fn create(id: u64, memory: &'a mut impl MemoryOperations) -> Core<'a> {
+        let registers: [RegisterValue; 32] = [0; 32];
+        let mut csrs: [RegisterValue; 4096] = [0; 4096];
         csrs[CSRRegister::mhartid as usize] = id;
 
         Core {
@@ -94,6 +98,8 @@ impl<'a> Core<'a> {
                 instruction: (false, 0),
                 stage: Stage::FETCH,
                 reg_out: None,
+                rs2v: 0,
+                memory_access_width: MemoryAccessWidth::WORD,
             },
         }
     }
@@ -116,16 +122,16 @@ impl<'a> Core<'a> {
         self.pmode
     }
 
-    pub fn read_register(&self, reg: Register) -> u64 {
+    pub fn read_register(&self, reg: Register) -> RegisterValue {
         match reg {
             0 => 0,
             _ => self.registers[reg as usize],
         }
     }
 
-    pub fn write_register(&mut self, reg: usize, value: u64) {
+    pub fn write_register(&mut self, reg: Register, value: RegisterValue) {
         if reg != 0 {
-            self.registers[reg] = value;
+            self.registers[reg as usize] = value;
         } else {
             panic!("Should never write to register x0")
         }
@@ -138,16 +144,16 @@ impl<'a> Core<'a> {
     fn fetch(&mut self) -> Stage {
         let instruction = self
             .memory
-            .read_single(self.pc as usize, MemoryAccessWidth::WORD)
+            .read_single(self.pc, MemoryAccessWidth::WORD)
             .unwrap() as u32;
-
-        //let b1513 = instruction >> 13 & 0x3;
-        let b01 = instruction & 0x3;
 
         println!("fetch: instruction @ {:#x}: {:#x}", self.pc, instruction);
 
+        // Store prev_pc, as we might step a HALFWORD if instruction is compressed
         self.prev_pc = self.pc;
-        self.pipe.instruction = match b01 == 0x03 {
+
+        // Determine if instruction is compressed
+        self.pipe.instruction = match (instruction & 0x3) == 0x03 {
             true => {
                 self.pc += 4;
                 (false, instruction)
@@ -169,64 +175,124 @@ impl<'a> Core<'a> {
 
     fn execute(&mut self) -> Stage {
         let decoded = self.pipe.decoded.as_ref().unwrap();
-        match decoded.opcode.unwrap_or(OpCodes::ILLEGAL) {
+        let opcode = decoded.opcode.unwrap_or(OpCodes::ILLEGAL);
+        match opcode {
             OpCodes::CSRRS => {
-                self.pipe.reg_out =
-                    Some((decoded.rd as Register, self.csrs[decoded.imm12 as usize]));
+                self.pipe.reg_out = Some((decoded.rd, self.csrs[decoded.imm12 as usize]));
                 if decoded.rs1 != 0 {
-                    self.csrs[decoded.imm12 as usize] |=
-                        self.read_register(decoded.rs1 as Register);
+                    self.csrs[decoded.imm12 as usize] |= self.read_register(decoded.rs1);
                 }
             }
+            OpCodes::CSRRW => {
+                if (decoded.rd != 0) {
+                    self.pipe.reg_out = Some((decoded.rd, self.csrs[decoded.imm12 as usize]));
+                }
+                self.csrs[decoded.imm12 as usize] = self.read_register(decoded.rs1);
+            }
             OpCodes::LUI => {
-                self.pipe.reg_out = Some((decoded.rd as Register, (decoded.imm20 << 12) as u64));
+                self.pipe.reg_out = Some((decoded.rd, (decoded.imm20 << 12) as u64));
             }
             OpCodes::AUIPC => {
                 const M: u32 = 1 << (20 - 1);
                 let se_imm20 = (decoded.imm20 ^ M) - M;
-                self.pipe.reg_out =
-                    Some((decoded.rd as Register, (se_imm20 << 12) as u64 + self.pc));
+                self.pipe.reg_out = Some((decoded.rd, (se_imm20 << 12) as u64 + self.prev_pc));
             }
+
             OpCodes::ADDI => {
                 // @TODO: Sign extend imm12?
+                let seimm12 = (decoded.imm12 as i64).sign_extend(64 - 12);
                 self.pipe.reg_out = Some((
-                    decoded.rd as Register,
-                    self.read_register(decoded.rs1 as Register)
-                        .wrapping_add(decoded.imm12 as u64),
+                    decoded.rd,
+                    (self.read_register(decoded.rs1) as i64).wrapping_add(seimm12) as u64,
                 ));
             }
             OpCodes::MUL => {
-                let rs1v = self.read_register(decoded.rs1 as Register);
-                let rs2v = self.read_register(decoded.rs2 as Register);
+                let rs1v = self.read_register(decoded.rs1);
+                let rs2v = self.read_register(decoded.rs2);
                 let rd = rs1v.checked_mul(rs2v);
-                self.pipe.reg_out = Some((decoded.rd as Register, rd.unwrap())) // Will panic if overflow
+                self.pipe.reg_out = Some((decoded.rd, rd.unwrap()))
+                // Will panic if overflow
             }
             OpCodes::ADD => {
                 self.pipe.reg_out = Some((
-                    decoded.rd as Register,
-                    self.read_register(decoded.rs1 as Register)
-                        .wrapping_add(self.read_register(decoded.rs2 as Register)),
+                    decoded.rd,
+                    self.read_register(decoded.rs1)
+                        .wrapping_add(self.read_register(decoded.rs2)),
                 ))
             }
             OpCodes::JAL => {
-                self.pipe.reg_out = Some((decoded.rd as Register, self.pc));
+                self.pipe.reg_out = Some((decoded.rd, self.pc));
                 self.pc = self.prev_pc + ((decoded.imm20 as u64) << 1 as u64);
                 //panic!("JAL {:#x} => {:#x}", decoded.imm20, self.pc);
             }
-            OpCodes::SD => todo!(),
-            OpCodes::ILLEGAL => panic!("ILLEGAL INSTRUCTION"),
-            _ => panic!(),
+            OpCodes::SD => {
+                self.pipe.rs2v = self.read_register(decoded.rs2);
+                self.pipe.memory_access_width = MemoryAccessWidth::WORD;
+                //todo!();
+            }
+            OpCodes::AND => {
+                self.pipe.reg_out = Some((
+                    decoded.rd,
+                    self.read_register(decoded.rs1) & self.read_register(decoded.rs2),
+                ));
+            }
+            OpCodes::JALR => {
+                self.pipe.reg_out = Some((decoded.rd, self.pc));
+                let rs1v = self.read_register(decoded.rs1);
+                let rel = (decoded.imm12 as i64).sign_extend(64 - 12);
+                self.pc = (rs1v as i64 + rel) as u64;
+            }
+            OpCodes::ADDIW => {
+                let seimm12 = (decoded.imm12 as i64).sign_extend(64 - 5);
+                self.pipe.reg_out = Some((
+                    decoded.rd,
+                    (self.read_register(decoded.rs1) as i64).wrapping_add(seimm12) as u64,
+                ));
+                //                todo!()
+            }
+            OpCodes::ILLEGAL => panic!("ILLEGAL INSTRUCTION {:?}", opcode),
+            _ => panic!("UNKNOWN INSTRUCTION {:?}", opcode),
         }
         Stage::MEMORY
     }
 
-    fn memory(&self) -> Stage {
+    fn memory(&mut self) -> Stage {
+        let decoded = self.pipe.decoded.as_ref().unwrap();
+        //let memory = self.pipe.decoded.as_ref().unwrap();
+        match decoded.mem_offset {
+            Some(offset) => {
+                match decoded.optype {
+                    // STORE
+                    InstructionFormat::S => {
+                        self.memory.write_single(
+                            (offset + self.memory.get_base_address()),
+                            self.pipe.rs2v,
+                            self.pipe.memory_access_width,
+                        );
+                    }
+                    InstructionFormat::CSS => {
+                        self.memory.write_single(
+                            (/*self.read_register(decoded.rs1 as u64)
+                            + */offset + self.memory.get_base_address()),
+                            self.pipe.rs2v,
+                            self.pipe.memory_access_width,
+                        );
+                    }
+                    // LOAD
+                    InstructionFormat::I => {
+                        todo!()
+                    }
+                    _ => panic!(),
+                }
+            }
+            None => {}
+        }
         Stage::WRITEBACK
     }
 
     fn writeback(&mut self) -> Stage {
         match self.pipe.reg_out {
-            Some((register, value)) => self.write_register(register as usize, value),
+            Some((register, value)) => self.write_register(register, value),
             None => {
                 panic!()
             }

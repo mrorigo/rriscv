@@ -2,7 +2,7 @@
 
 use rriscv::{
     self,
-    cpu::{self, Core, Register},
+    cpu::{self, Core, RegisterValue},
     decoder::{DecodedInstruction, InstructionDecoder},
     memory::Memory,
     opcodes::OpCodes,
@@ -15,8 +15,8 @@ macro_rules! test_case {
         #[no_mangle]
         #[test]
         pub fn $n() {
-            let memory = Memory::create(VBASE, 4096);
-            let core = cpu::Core::create(0x0, &memory);
+            let memory = &mut Memory::create(VBASE, 4096);
+            let core = cpu::Core::create(0x0, memory);
             run_test_case(core, $a)
         }
     };
@@ -28,7 +28,7 @@ macro_rules! prop_assertion {
             Some(val) => {
                 assert!(
                     $decoded.$prop == val,
-                    "{} {:?} != {:?}",
+                    "{} {:#x?} != {:#x?}",
                     stringify!($prop),
                     val,
                     $decoded.$prop
@@ -223,7 +223,36 @@ impl TestCase {
             imm20: None,
         }
     }
+
+    pub fn c(
+        name: &'static str,
+        opcode: OpCodes,
+        instruction: u32,
+        rd: u8,
+        rs1: u8,
+        imm12: u16, // csr
+        funct3: u8,
+    ) -> TestCase {
+        TestCase {
+            name,
+            opcode,
+            instruction: (false, instruction),
+            rs1: Some(rs1),
+            rs2: None,
+            rd: Some(rd),
+            funct3: Some(funct3),
+            imm5: None,
+            imm12: Some(imm12),
+            imm20: None,
+        }
+    }
 }
+
+// #[test]
+// pub fn runn() {
+//     println!("ADDIW: {:#x?}", OpCodes::ADDIW as u32);
+//     assert!(false, "TEST")
+// }
 
 test_case! {lui1, TestCase::uj(&"LUI X14,0x2004", OpCodes::LUI, 0x02004737, 14, 0x2004)}
 test_case! {lui2, TestCase::uj(&"LUI X14,0x7ff4", OpCodes::LUI, 0x07ff4737, 14, 0x7ff4)}
@@ -235,3 +264,7 @@ test_case! {addi, TestCase::i(&"ADDI X2,X2,-1520", OpCodes::ADDI, 0xa1010113, 2,
 test_case! {sd,   TestCase::s(&"SD X1, 8(X2)", OpCodes::SD, 0x00113423, 2 ,1, 0b011, 8)}
 test_case! {c_sdsp, TestCase::css(&"C.SDSP  x1,8(x2)", OpCodes::SD, 0xe406, 1, 0b111, 8) }
 test_case! {c_addi4spn, TestCase::ciw(&"C.ADDI4SPN X8,X2,16", OpCodes::ADDI, 0x0800, 8, 0b000, 16) }
+test_case! {csrrw0, TestCase::c(&"CSRRW X0,mstatus,X15", OpCodes::CSRRW, 0x30079073, 0, 15, 0x300, 0b001) }
+test_case! {csrrw1, TestCase::c(&"CSRRW X1,mstatus,X15", OpCodes::CSRRW, 0x300790f3, 1, 15, 0x300, 0b001) }
+
+test_case! {addiw, TestCase::i(&"ADDIW X11,X15,0", OpCodes::ADDIW, 0x0007859b, 11, 15, 0b000, 0) }
