@@ -4,7 +4,8 @@ use crate::{
 };
 
 use super::{
-    opcodes::MajorOpcode, ImmediateDecoder, Instruction, InstructionExcecutor, InstructionSelector,
+    opcodes::MajorOpcode, FormatDecoder, ImmediateDecoder, Instruction, InstructionExcecutor,
+    InstructionFormatType, InstructionSelector,
 };
 //* 2.2 Base Instruction Formats */
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -15,6 +16,21 @@ pub struct Btype {
     pub rs2: Register,
     pub funct3: u8,
     pub imm12: u16,
+}
+
+impl InstructionFormatType for Btype {}
+
+impl FormatDecoder<Btype> for Btype {
+    fn decode(word: u32) -> Btype {
+        Btype {
+            opcode: num::FromPrimitive::from_u8((word & 0x7f) as u8).unwrap(),
+            rd: ((word >> 7) & 31) as Register,
+            rs1: ((word >> 15) & 31) as Register,
+            rs2: ((word >> 20) & 31) as Register,
+            imm12: Btype::decode_immediate(word),
+            funct3: ((word >> 12) & 7) as u8,
+        }
+    }
 }
 
 impl ImmediateDecoder<u32, u16> for Btype {

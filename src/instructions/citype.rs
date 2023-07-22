@@ -6,7 +6,10 @@ use crate::{
 };
 
 use super::{
-    decoder::C1_Funct3, opcodes::CompressedOpcode, ImmediateDecoder, Instruction,
+    ciwtype::CIWtype,
+    functions::{C1_Funct3, Funct3},
+    opcodes::CompressedOpcode,
+    CompressedFormat, CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder, Instruction,
     InstructionExcecutor, InstructionSelector,
 };
 
@@ -15,7 +18,20 @@ pub struct CItype {
     pub opcode: CompressedOpcode,
     pub rd: Register,
     pub imm: u16,
-    pub funct3: u8,
+    pub funct3: Funct3,
+}
+
+impl CompressedFormatType for CItype {}
+
+impl CompressedFormatDecoder<CItype> for CItype {
+    fn decode(word: u16) -> CItype {
+        CItype {
+            opcode: num::FromPrimitive::from_u8((word & 3) as u8).unwrap(),
+            rd: ((word >> 7) & 31) as u8,
+            imm: CItype::decode_immediate(word as u16),
+            funct3: num::FromPrimitive::from_u8(((word >> 13) & 0x7) as u8).unwrap(),
+        }
+    }
 }
 
 impl ImmediateDecoder<u16, u16> for CItype {
@@ -33,7 +49,7 @@ impl Instruction<CItype> {
             mnemonic: "C.LUI",
             args: Some(citype),
             funct: |core, args| {
-                let value = ((args.imm as u64) << 12); //(core.xlen as u64 - 20));
+                let value = (args.imm as u64) << 12;
                 debug_trace!(println!(
                     "C.LUI x{}, {:#x?} ; x{} = {:#x?}",
                     args.rd, args.imm, args.rd, value
@@ -65,7 +81,7 @@ impl Instruction<CItype> {
 impl InstructionSelector<CItype> for CItype {
     fn select(&self, _xlen: Xlen) -> Instruction<CItype> {
         match self.opcode {
-            CompressedOpcode::C1 => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
+            CompressedOpcode::C1 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                 C1_Funct3::C_LUI => Instruction::C_LUI(*self),
                 C1_Funct3::C_ADDI => Instruction::C_ADDI(*self),
                 _ => panic!(),

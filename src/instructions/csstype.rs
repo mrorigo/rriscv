@@ -4,8 +4,8 @@ use crate::{
 };
 
 use super::{
-    opcodes::CompressedOpcode, ImmediateDecoder, Instruction, InstructionExcecutor,
-    InstructionSelector,
+    functions::Funct3, opcodes::CompressedOpcode, CompressedFormatDecoder, CompressedFormatType,
+    ImmediateDecoder, Instruction, InstructionExcecutor, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -13,7 +13,20 @@ pub struct CSStype {
     pub opcode: CompressedOpcode,
     pub uimm: u16,
     pub rs2: Register,
-    pub funct3: u8,
+    pub funct3: Funct3,
+}
+
+impl CompressedFormatType for CSStype {}
+
+impl CompressedFormatDecoder<CSStype> for CSStype {
+    fn decode(word: u16) -> CSStype {
+        CSStype {
+            opcode: num::FromPrimitive::from_u8((word & 3) as u8).unwrap(),
+            uimm: CSStype::decode_immediate(word as u16),
+            rs2: (word >> 2) as u8 & 31,
+            funct3: num::FromPrimitive::from_u8(((word >> 13) & 0x7) as u8).unwrap(),
+        }
+    }
 }
 
 impl ImmediateDecoder<u16, u16> for CSStype {
@@ -61,7 +74,7 @@ impl InstructionSelector<CSStype> for CSStype {
     fn select(&self, xlen: Xlen) -> Instruction<CSStype> {
         match self.funct3 {
             // C.FSWSP or C.SDSP
-            0b111 => match xlen {
+            Funct3::B111 => match xlen {
                 Xlen::Bits32 => Instruction::C_FSWSP(*self),
                 _ => Instruction::C_SDSP(*self),
             },

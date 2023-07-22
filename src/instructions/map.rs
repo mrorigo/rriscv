@@ -1,38 +1,38 @@
-use crate::instructions::{CompressedInstructionFormat, InstructionFormat};
+use crate::instructions::{CompressedFormat, InstructionFormat};
 
-pub const COMPRESSED_FORMAT_MAP: [CompressedInstructionFormat; 32] = [
-    CompressedInstructionFormat::CIW, // 0
-    CompressedInstructionFormat::CI,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::CI,      // C.LI
-    CompressedInstructionFormat::Unknown, // 10
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::CI, // C.LUI , ADDI16SP
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::CS,
-    CompressedInstructionFormat::CR,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown, // 20
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::Unknown,
-    CompressedInstructionFormat::CSS,     // C.SDSP,
-    CompressedInstructionFormat::Unknown, // 31
+pub const COMPRESSED_FORMAT_MAP: [CompressedFormat; 32] = [
+    CompressedFormat::CIW, // 0
+    CompressedFormat::CI,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::CI,      // C.LI
+    CompressedFormat::Unknown, // 10
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::CI, // C.LUI , ADDI16SP
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::CS,
+    CompressedFormat::CR,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown, // 20
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::Unknown,
+    CompressedFormat::CSS,     // C.SDSP,
+    CompressedFormat::Unknown, // 31
 ];
 // pub enum CsrInstructionType {
 //     CSRRW = 0b001,

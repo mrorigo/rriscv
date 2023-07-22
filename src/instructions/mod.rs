@@ -3,6 +3,8 @@ use crate::{
     pipeline::Stage,
 };
 
+use self::itype::Itype;
+
 macro_rules! debug_trace {
     ($instr:expr) => {
         print!("DEBUG_TRACE: ");
@@ -20,6 +22,7 @@ pub mod crtype;
 pub mod csstype;
 pub mod cstype;
 pub mod decoder;
+pub mod functions;
 pub mod itype;
 pub mod jtype;
 pub mod map;
@@ -28,25 +31,24 @@ pub mod rtype;
 pub mod stype;
 pub mod utype;
 
+/// "2.2 Base instruction formats" and "2.3 Immediate Encoding Variants"
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 #[repr(u8)]
 pub enum InstructionFormat {
     Unknown = 0,
-    // 2.2 Base instruction formats
     R,
     I,
     S,
     U,
-    // 2.3 Immediate Encoding Variants
     B,
     J,
 }
 
+/// Table 12.1: Compressed 16-bit RVC instruction formats.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 #[repr(u8)]
-pub enum CompressedInstructionFormat {
+pub enum CompressedFormat {
     Unknown = 0,
-    // Table 12.1: Compressed 16-bit RVC instruction formats.
     CR,
     CI,
     CSS,
@@ -56,10 +58,22 @@ pub enum CompressedInstructionFormat {
     CB,
     CJ,
 }
+
+pub trait InstructionFormatType {}
+pub trait CompressedFormatType {}
+
 pub struct Instruction<T> {
     args: Option<T>,
     mnemonic: &'static str,
     funct: fn(&mut Core, &T) -> Stage,
+}
+
+pub trait FormatDecoder<T: InstructionFormatType> {
+    fn decode(word: u32) -> T;
+}
+
+pub trait CompressedFormatDecoder<T: CompressedFormatType> {
+    fn decode(word: u16) -> T;
 }
 
 pub trait ImmediateDecoder<T, T2> {
@@ -72,10 +86,6 @@ pub trait InstructionExcecutor {
 
 pub trait InstructionSelector<T> {
     fn select(&self, _xlen: Xlen) -> Instruction<T> {
-        Instruction {
-            mnemonic: &"ILLEGAL",
-            args: None,
-            funct: |_core, _args| panic!("ILLEGAL INSTRUCTION"),
-        }
+        todo!();
     }
 }

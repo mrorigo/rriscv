@@ -6,7 +6,9 @@ use crate::{
 };
 
 use super::{
-    decoder::RV32M_Funct3, opcodes::MajorOpcode, Instruction, InstructionExcecutor,
+    functions::{Funct3, RV32M_Funct3},
+    opcodes::MajorOpcode,
+    FormatDecoder, Instruction, InstructionExcecutor, InstructionFormat, InstructionFormatType,
     InstructionSelector,
 };
 
@@ -16,8 +18,23 @@ pub struct Rtype {
     pub rd: Register,
     pub rs1: Register,
     pub rs2: Register,
-    pub funct3: u8,
+    pub funct3: Funct3,
     pub funct7: u8,
+}
+
+impl InstructionFormatType for Rtype {}
+
+impl FormatDecoder<Rtype> for Rtype {
+    fn decode(word: u32) -> Rtype {
+        Rtype {
+            opcode: num::FromPrimitive::from_u8((word & 0x7f) as u8).unwrap(),
+            rd: ((word >> 7) & 31) as Register,
+            rs1: ((word >> 15) & 31) as Register,
+            rs2: ((word >> 20) & 31) as Register,
+            funct3: num::FromPrimitive::from_u8(((word >> 12) & 7) as u8).unwrap(),
+            funct7: ((word >> 25) & 0x7f) as u8,
+        }
+    }
 }
 
 impl Display for Instruction<Rtype> {
@@ -58,7 +75,7 @@ impl InstructionSelector<Rtype> for Rtype {
         match self.opcode {
             MajorOpcode::OP => match self.funct7 {
                 // RV32M
-                1 => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
+                1 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                     RV32M_Funct3::MUL => Instruction::MUL(*self),
                     _ => panic!(),
                 },

@@ -3,7 +3,10 @@ use crate::{
     pipeline::{Stage, WritebackStage},
 };
 
-use super::{opcodes::CompressedOpcode, Instruction, InstructionExcecutor, InstructionSelector};
+use super::{
+    opcodes::CompressedOpcode, CompressedFormatDecoder, CompressedFormatType, Instruction,
+    InstructionExcecutor, InstructionSelector,
+};
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct CRtype {
@@ -12,6 +15,20 @@ pub struct CRtype {
     pub rs2: Register,
     pub funct1: u8,
     pub funct3: u8,
+}
+
+impl CompressedFormatType for CRtype {}
+
+impl CompressedFormatDecoder<CRtype> for CRtype {
+    fn decode(word: u16) -> CRtype {
+        CRtype {
+            opcode: num::FromPrimitive::from_u8((word & 3) as u8).unwrap(),
+            rs2: ((word >> 2) & 31) as Register,
+            rs1: (word >> 7 & 31) as Register,
+            funct1: (word >> 12) as u8 & 1,
+            funct3: num::FromPrimitive::from_u8(((word >> 13) & 0x7) as u8).unwrap(),
+        }
+    }
 }
 
 #[allow(non_snake_case)]

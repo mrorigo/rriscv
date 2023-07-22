@@ -4,8 +4,8 @@ use crate::{
 };
 
 use super::{
-    opcodes::CompressedOpcode, ImmediateDecoder, Instruction, InstructionExcecutor,
-    InstructionSelector,
+    opcodes::CompressedOpcode, CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder,
+    Instruction, InstructionExcecutor, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -14,6 +14,19 @@ pub struct CLtype {
     pub rd: Register,
     pub rs1: Register,
     pub imm: u16,
+}
+
+impl CompressedFormatType for CLtype {}
+
+impl CompressedFormatDecoder<CLtype> for CLtype {
+    fn decode(word: u16) -> CLtype {
+        CLtype {
+            opcode: num::FromPrimitive::from_u8((word & 3) as u8).unwrap(),
+            rd: ((word >> 2) & 7) as Register + 8,
+            rs1: ((word >> 7) & 31) as Register + 8,
+            imm: CLtype::decode_immediate(word as u16),
+        }
+    }
 }
 
 impl ImmediateDecoder<u16, u16> for CLtype {

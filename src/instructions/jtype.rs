@@ -4,7 +4,8 @@ use crate::{
 };
 
 use super::{
-    opcodes::MajorOpcode, ImmediateDecoder, Instruction, InstructionExcecutor, InstructionSelector,
+    opcodes::MajorOpcode, FormatDecoder, ImmediateDecoder, Instruction, InstructionExcecutor,
+    InstructionFormatType, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -12,6 +13,18 @@ pub struct Jtype {
     pub opcode: MajorOpcode,
     pub rd: Register,
     pub imm20: u32,
+}
+
+impl InstructionFormatType for Jtype {}
+
+impl FormatDecoder<Jtype> for Jtype {
+    fn decode(word: u32) -> Jtype {
+        Jtype {
+            opcode: num::FromPrimitive::from_u8((word & 0x7f) as u8).unwrap(),
+            rd: ((word >> 7) & 31) as Register,
+            imm20: Jtype::decode_immediate(word),
+        }
+    }
 }
 
 #[allow(non_snake_case)]

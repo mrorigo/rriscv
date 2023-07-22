@@ -1,15 +1,43 @@
+use std::fmt::Display;
+
 use crate::{
     cpu::{Core, Register, Xlen},
     pipeline::{Stage, WritebackStage},
 };
 
-use super::{opcodes::MajorOpcode, Instruction, InstructionExcecutor, InstructionSelector};
+use super::{
+    opcodes::MajorOpcode, FormatDecoder, Instruction, InstructionExcecutor, InstructionFormatType,
+    InstructionSelector,
+};
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Utype {
     pub opcode: MajorOpcode,
     pub rd: Register,
     pub imm20: u32,
+}
+
+impl InstructionFormatType for Utype {}
+
+impl FormatDecoder<Utype> for Utype {
+    fn decode(word: u32) -> Utype {
+        Utype {
+            opcode: num::FromPrimitive::from_u8((word & 0x7f) as u8).unwrap(),
+            rd: ((word >> 7) & 31) as Register,
+            imm20: (word >> 12),
+        }
+    }
+}
+
+impl Display for Instruction<Utype> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.args.is_some() {
+            write!(f, "{}", self.mnemonic)
+        } else {
+            let args = self.args.unwrap();
+            write!(f, "{} x{},{}", self.mnemonic, args.rd, args.imm20)
+        }
+    }
 }
 
 impl Instruction<Utype> {
