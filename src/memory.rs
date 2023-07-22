@@ -22,8 +22,14 @@ pub trait MemoryOperations<T, T2: MemoryCellType> {
     fn read8(&self, addr: VAddr) -> Option<T2>;
     fn write8(&mut self, addr: VAddr, value: T2) -> bool;
 
+    fn read64(&self, addr: VAddr) -> Option<u64>;
+    fn write64(&mut self, addr: VAddr, value: u64);
+
     fn read32(&self, addr: VAddr) -> Option<u32>;
     fn write32(&mut self, addr: VAddr, value: u32);
+
+    fn read16(&self, addr: VAddr) -> Option<u16>;
+    fn write16(&mut self, addr: VAddr, value: u16);
 
     //    fn add_segment(&mut self, base_address: VAddr, size: usize);
 }
@@ -97,6 +103,26 @@ impl MemoryOperations<RAM, u8> for RAM {
             self.write8(addr + i, v as u8);
             v >>= 8;
         }
+    }
+
+    fn write16(&mut self, addr: VAddr, value: u16) {
+        let mut v = value;
+        for i in 0..2 {
+            self.write8(addr + i, v as u8);
+            v >>= 8;
+        }
+    }
+
+    fn read16(&self, addr: VAddr) -> Option<u16> {
+        todo!()
+    }
+
+    fn read64(&self, addr: VAddr) -> Option<u64> {
+        todo!()
+    }
+
+    fn write64(&mut self, addr: VAddr, value: u64) {
+        todo!()
     }
 }
 

@@ -102,6 +102,22 @@ impl MemoryOperations<PhysicalMemory, u8> for PhysicalMemory {
     fn write32(&mut self, addr: VAddr, value: u32) {
         self.ram.write32(addr, value)
     }
+
+    fn read64(&self, addr: VAddr) -> Option<u64> {
+        self.ram.read64(addr)
+    }
+
+    fn write64(&mut self, addr: VAddr, value: u64) {
+        self.ram.write64(addr, value)
+    }
+
+    fn read16(&self, addr: VAddr) -> Option<u16> {
+        self.ram.read16(addr)
+    }
+
+    fn write16(&mut self, addr: VAddr, value: u16) {
+        self.ram.write16(addr, value);
+    }
 }
 
 impl VirtualDevice for PhysicalMemory {
@@ -148,12 +164,26 @@ impl MemoryOperations<PLIC, u8> for PLIC {
         self.ram.write8(addr, value)
     }
 
+    fn read16(&self, addr: VAddr) -> Option<u16> {
+        self.ram.read16(addr)
+    }
+
+    fn write16(&mut self, addr: VAddr, value: u16) {
+        self.ram.write16(addr, value)
+    }
+
     fn read32(&self, addr: VAddr) -> Option<u32> {
         self.ram.read32(addr)
     }
-
     fn write32(&mut self, addr: VAddr, value: u32) {
         self.ram.write32(addr, value)
+    }
+
+    fn read64(&self, addr: VAddr) -> Option<u64> {
+        self.ram.read64(addr)
+    }
+    fn write64(&mut self, addr: VAddr, value: u64) {
+        self.ram.write64(addr, value)
     }
 }
 
@@ -172,6 +202,22 @@ impl MemoryOperations<CLINT, u8> for CLINT {
 
     fn write32(&mut self, addr: VAddr, value: u32) {
         self.ram.write32(addr, value)
+    }
+
+    fn read64(&self, addr: VAddr) -> Option<u64> {
+        todo!()
+    }
+
+    fn write64(&mut self, addr: VAddr, value: u64) {
+        todo!()
+    }
+
+    fn read16(&self, addr: VAddr) -> Option<u16> {
+        todo!()
+    }
+
+    fn write16(&mut self, addr: VAddr, value: u16) {
+        todo!()
     }
 }
 

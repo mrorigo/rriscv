@@ -116,6 +116,22 @@ impl MemoryOperations<MMU, u8> for MMU {
             )
         }
     }
+
+    fn read64(&self, addr: VAddr) -> Option<u64> {
+        todo!()
+    }
+
+    fn write64(&mut self, addr: VAddr, value: u64) {
+        todo!()
+    }
+
+    fn read16(&self, addr: VAddr) -> Option<u16> {
+        todo!()
+    }
+
+    fn write16(&mut self, addr: VAddr, value: u16) {
+        todo!()
+    }
 }
 
 impl RAMOperations<MMU> for MMU {}
