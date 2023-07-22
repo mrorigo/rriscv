@@ -1,5 +1,5 @@
 use rriscv::instructions::{
-    decoder::{OpImmFunct3, RV32M_Funct3},
+    functions::{OpImmFunct3, RV32M_Funct3},
     itype::Itype,
     rtype::Rtype,
     Instruction,
@@ -34,7 +34,7 @@ fn encode_r() {
             rd: 10,
             rs1: 9,
             rs2: 11,
-            funct3: RV32M_Funct3::MUL as u8,
+            funct3: num::FromPrimitive::from_u8(RV32M_Funct3::MUL as u8).unwrap(),
             funct7: 1,
         }),
     }];
@@ -53,7 +53,7 @@ fn encode_i() {
             rd: 3,
             rs1: 9,
             imm12: 0x80,
-            funct3: OpImmFunct3::ADDI as u8,
+            funct3: num::FromPrimitive::from_u8(OpImmFunct3::ADDI as u8).unwrap(),
         }),
     }];
 

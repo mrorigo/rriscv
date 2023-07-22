@@ -8,6 +8,7 @@ use rriscv::{
     instructions::{
         csstype::CSStype,
         decoder::DecodedInstruction,
+        functions::Funct3,
         opcodes::{CompressedOpcode, MajorOpcode},
         stype::Stype,
     },
@@ -74,7 +75,7 @@ test_case! {jal, TestCase::create(&"JAL X1,0x9", 0x076000ef, false, DecodedInstr
 test_case! {addi, TestCase::create(&"ADDI X2,X2,-1520", 0xa1010113, false, DecodedInstruction::I(Itype { opcode: MajorOpcode::OP_IMM, rd:2, rs1: 2, imm12: 2576, funct3: 0b000 }))}
 
 test_case! {sd,   TestCase::create(&"SD X1, 8(X2)", 0x00113423, false, DecodedInstruction::S(Stype{opcode: MajorOpcode::STORE, rs1: 2, rs2: 1, funct3: 0b011, imm12: 8}))}
-test_case! {c_sdsp, TestCase::create(&"C.SDSP  x1,8(x2)", 0xe406, true, DecodedInstruction::CSS(CSStype {opcode: CompressedOpcode::C2, rs2: 1, funct3: 0b111, uimm: 8})) }
+test_case! {c_sdsp, TestCase::create(&"C.SDSP  x1,8(x2)", 0xe406, true, DecodedInstruction::CSS(CSStype {opcode: CompressedOpcode::C2, rs2: 1, funct3: Funct3::B111, uimm: 8})) }
 // test_case! {c_addi4spn, TestCase::ciw(&"C.ADDI4SPN X8,X2,16", OpCodes::ADDI, 0x0800, 8, 0b000, 16) }
 test_case! {csrrw0, TestCase::create(&"CSRRW X0,mstatus,X15", 0x30079073, false, DecodedInstruction::I(Itype { opcode: MajorOpcode::SYSTEM, rd: 0, rs1: 15, funct3: 0b001, imm12: 0x300 })) }
 test_case! {csrrw1, TestCase::create(&"CSRRW X1,mstatus,X15", 0x302790f3, false, DecodedInstruction::I(Itype { opcode: MajorOpcode::SYSTEM, rd: 1, rs1: 15, funct3: 0b001, imm12: 0x302 })) }
