@@ -57,7 +57,14 @@ pub enum CSRRegister {
     mcounteren = 0x306,
     mstatush = 0x307,
 
+    mscratch = 0x340,
+    mepc = 0x341,
+    mcause = 0x342,
+    mtval = 0x343,
     mip = 0x344,
+
+    pmpcfg0 = 0x3a0,
+    pmpaddr0 = 0x3b0,
 
     mcycle = 0xb00,
     minstret = 0xb02,
