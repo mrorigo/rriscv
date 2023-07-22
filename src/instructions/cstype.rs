@@ -17,21 +17,22 @@ pub struct CStype {
     pub opcode: CompressedOpcode,
     pub rs1_rd: Register,
     pub rs2: Register,
+    pub shamt: u8,
     pub funct2: u8,
     pub funct6: u8,
     pub funct3: Funct3,
 }
 
 impl CompressedFormatType for CStype {}
-
 impl CompressedFormatDecoder<CStype> for CStype {
     fn decode(word: u16) -> CStype {
         CStype {
             opcode: num::FromPrimitive::from_u8((word & 3) as u8).unwrap(),
             rs1_rd: ((word >> 7) & 3) as u8 + 8,
             rs2: ((word >> 2) & 7) as u8 + 8,
-            funct2: (word as u8 >> 5) & 3,
-            funct6: (word >> 10) as u8,
+            shamt: (((word >> 7) & 0b100000) | ((word >> 2) & 0x1f)) as u8,
+            funct2: (word >> 5) as u8 & 0x3,
+            funct6: (word >> 10) as u8 & 0b111111,
             funct3: num::FromPrimitive::from_u8(((word >> 13) & 0x7) as u8).unwrap(),
         }
     }
@@ -83,18 +84,52 @@ impl Instruction<CStype> {
             },
         }
     }
+    pub fn C_SRLI(cstype: CStype) -> Instruction<CStype> {
+        Instruction {
+            args: Some(cstype),
+            mnemonic: &"C.SRLI",
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1_rd);
+                let value = rs1v >> args.shamt;
+                Stage::WRITEBACK(Some(WritebackStage {
+                    register: args.rs1_rd,
+                    value,
+                }))
+            },
+        }
+    }
+    pub fn C_SRAI(cstype: CStype) -> Instruction<CStype> {
+        Instruction {
+            args: Some(cstype),
+            mnemonic: &"C.SRAI",
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1_rd);
+                let rs2v = core.read_register(args.rs2);
+                let value = todo!();
+                Stage::WRITEBACK(Some(WritebackStage {
+                    register: args.rs1_rd,
+                    value,
+                }))
+            },
+        }
+    }
 }
 
 impl InstructionSelector<CStype> for CStype {
     fn select(&self, _xlen: crate::cpu::Xlen) -> Instruction<CStype> {
         match self.opcode {
             CompressedOpcode::C0 => todo!(),
-            CompressedOpcode::C1 => match self.funct2 {
-                0b00 => todo!(),
-                0b01 => todo!(),
-                0b10 => Instruction::C_OR(*self),
-                // C.AND is the only instruction matching funct2=0b11, other matches are Reserved
-                0b11 => Instruction::C_AND(*self),
+            CompressedOpcode::C1 => match self.funct6 {
+                0b100011 => match self.funct2 {
+                    0b00 => todo!(),
+                    0b01 => todo!(),
+                    0b10 => Instruction::C_OR(*self),
+                    0b11 => Instruction::C_AND(*self),
+                    _ => panic!(),
+                },
+                0b100000 => Instruction::C_SRLI(*self),
+                0b100001 => Instruction::C_SRAI(*self),
+
                 _ => panic!(),
             },
             _ => panic!(),
