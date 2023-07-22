@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     cpu::{Core, Register, Xlen},
     pipeline::{MemoryAccess, Stage},
@@ -5,7 +7,8 @@ use crate::{
 
 use super::{
     functions::Funct3, opcodes::CompressedOpcode, CompressedFormatDecoder, CompressedFormatType,
-    ImmediateDecoder, Instruction, InstructionExcecutor, InstructionSelector,
+    ImmediateDecoder, Instruction, InstructionExcecutor, InstructionFormatType,
+    InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -16,6 +19,7 @@ pub struct CSStype {
     pub funct3: Funct3,
 }
 
+impl InstructionFormatType for CSStype {}
 impl CompressedFormatType for CSStype {}
 
 impl CompressedFormatDecoder<CSStype> for CSStype {
@@ -36,6 +40,17 @@ impl ImmediateDecoder<u16, u16> for CSStype {
         let imm11_5 = (offset >> 5) & 0x3f;
         let imm4_0 = offset & 0x1f;
         (imm11_5 << 5) | (imm4_0)
+    }
+}
+
+impl Display for Instruction<CSStype> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.args.is_some() {
+            write!(f, "{}", self.mnemonic)
+        } else {
+            let args = self.args.unwrap();
+            write!(f, "{} x{},{}(x2)", self.mnemonic, args.rs2, args.uimm)
+        }
     }
 }
 
@@ -82,9 +97,9 @@ impl InstructionSelector<CSStype> for CSStype {
         }
     }
 }
-
-impl InstructionExcecutor for Instruction<CSStype> {
+impl InstructionExcecutor<CSStype> for Instruction<CSStype> {
     fn run(&self, core: &mut Core) -> Stage {
+        instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }

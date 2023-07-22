@@ -5,7 +5,7 @@ use crate::{
 
 macro_rules! instruction_trace {
     ($instr:expr) => {
-        print!("PIPELINE: execute:  ");
+        print!("P:x: ");
         $instr;
     };
 }
@@ -58,7 +58,9 @@ pub enum CompressedFormat {
 }
 
 pub trait InstructionFormatType {}
-pub trait CompressedFormatType {}
+
+pub trait UncompressedFormatType: InstructionFormatType {}
+pub trait CompressedFormatType: InstructionFormatType {}
 
 pub struct Instruction<T> {
     args: Option<T>,
@@ -66,7 +68,9 @@ pub struct Instruction<T> {
     funct: fn(&mut Core, &T) -> Stage,
 }
 
-pub trait FormatDecoder<T: InstructionFormatType> {
+pub trait InstructionType {}
+
+pub trait FormatDecoder<T: UncompressedFormatType> {
     fn decode(word: u32) -> T;
 }
 
@@ -78,7 +82,7 @@ pub trait ImmediateDecoder<T, T2> {
     fn decode_immediate(i: T) -> T2;
 }
 
-pub trait InstructionExcecutor {
+pub trait InstructionExcecutor<T: InstructionFormatType> {
     fn run(&self, core: &mut Core) -> Stage;
 }
 

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use quark::Signs;
 
 use crate::{
@@ -7,7 +9,7 @@ use crate::{
 
 use super::{
     opcodes::MajorOpcode, FormatDecoder, ImmediateDecoder, Instruction, InstructionExcecutor,
-    InstructionFormatType, InstructionSelector,
+    InstructionFormatType, InstructionSelector, UncompressedFormatType,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -18,6 +20,7 @@ pub struct Jtype {
 }
 
 impl InstructionFormatType for Jtype {}
+impl UncompressedFormatType for Jtype {}
 
 impl FormatDecoder<Jtype> for Jtype {
     fn decode(word: u32) -> Jtype {
@@ -25,6 +28,17 @@ impl FormatDecoder<Jtype> for Jtype {
             opcode: num::FromPrimitive::from_u8((word & 0x7f) as u8).unwrap(),
             rd: ((word >> 7) & 31) as Register,
             imm20: Jtype::decode_immediate(word),
+        }
+    }
+}
+
+impl Display for Instruction<Jtype> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.args.is_some() {
+            write!(f, "{}", self.mnemonic)
+        } else {
+            let args = self.args.unwrap();
+            write!(f, "{} x{},{}", self.mnemonic, args.rd, args.imm20,)
         }
     }
 }
@@ -44,7 +58,7 @@ impl Instruction<Jtype> {
 
                 instruction_trace!(println!("JAL {:#x?}", target));
                 if args.rd != 0 {
-                    Stage::writeback(args.rd, core.pc)
+                    Stage::writeback(args.rd, core.pc())
                 } else {
                     Stage::WRITEBACK(None)
                 }
@@ -74,8 +88,9 @@ impl InstructionSelector<Jtype> for Jtype {
     }
 }
 
-impl InstructionExcecutor for Instruction<Jtype> {
+impl InstructionExcecutor<Jtype> for Instruction<Jtype> {
     fn run(&self, core: &mut Core) -> Stage {
+        instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }

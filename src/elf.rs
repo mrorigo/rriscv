@@ -17,7 +17,7 @@ impl ElfLoader for Loader<'_> {
     fn allocate(&mut self, load_headers: LoadableHeaders) -> Result<(), ElfLoaderErr> {
         for header in load_headers {
             println!(
-                "allocate base = {:#x} size = {:#x} flags = {}",
+                "ELF load: allocate vaddr = {:#x} size = {:#x} flags = {}",
                 header.virtual_addr(),
                 header.mem_size(),
                 header.flags()
@@ -41,8 +41,8 @@ impl ElfLoader for Loader<'_> {
 
                 // This is a relative relocation, add the offset (where we put our
                 // binary in the vspace) to the addend and we're done.
-                println!("R_RELATIVE *{:p} = {:#x}", addr, self.vbase + addend);
-                Ok(())
+                todo!("R_RELATIVE *{:p} = {:#x}", addr, self.vbase + addend);
+                //Ok(())
             }
             _ => Ok((/* not implemented */)),
         }
@@ -52,27 +52,12 @@ impl ElfLoader for Loader<'_> {
         let start = base;
         let end = base + region.len() as u64;
         println!(
-            "load: base={:#x} region into = {:#x} -- {:#x}  vbase: {:#x}",
+            "ELF load: base={:#x} region into = {:#x} -- {:#x}  vbase: {:#x}",
             base, start, end, self.vbase
         );
         for offs in 0..region.len() {
-            self.memory.write_single(offs as u64 + start, region[offs]);
+            self.memory.write8(offs as u64 + start, region[offs]);
         }
         Ok(())
     }
-
-    // fn tls(
-    //     &mut self,
-    //     tdata_start: VAddr,
-    //     _tdata_length: u64,
-    //     total_size: u64,
-    //     _align: u64,
-    // ) -> Result<(), ElfLoaderErr> {
-    //     let tls_end = tdata_start + total_size;
-    //     println!(
-    //         "Initial TLS region is at = {:#x} -- {:#x}",
-    //         tdata_start, tls_end
-    //     );
-    //     Ok(())
-    // }
 }

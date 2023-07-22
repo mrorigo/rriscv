@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     functions::Store_Funct3, opcodes::MajorOpcode, FormatDecoder, ImmediateDecoder, Instruction,
-    InstructionExcecutor, InstructionFormatType, InstructionSelector,
+    InstructionExcecutor, InstructionFormatType, InstructionSelector, UncompressedFormatType,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -23,6 +23,7 @@ pub struct Stype {
 }
 
 impl InstructionFormatType for Stype {}
+impl UncompressedFormatType for Stype {}
 
 impl FormatDecoder<Stype> for Stype {
     fn decode(word: u32) -> Stype {
@@ -55,7 +56,7 @@ impl Instruction<Stype> {
                 let rs2v = core.read_register(args.rs2);
 
                 // The effective byte address is obtained by adding register rs1 to the sign-extended 12-bit offset
-                let addr = rs1v + (args.imm12 as u64).sign_extend(64 - 12) as VAddr;
+                let addr = rs1v.wrapping_add((args.imm12 as u64).sign_extend(64 - 12)) as VAddr;
                 Stage::MEMORY(MemoryAccess::WRITE64(addr, rs2v))
             },
         }
@@ -69,7 +70,7 @@ impl Instruction<Stype> {
                 let rs2v = core.read_register(args.rs2);
 
                 // The effective byte address is obtained by adding register rs1 to the sign-extended 12-bit offset
-                let addr = rs1v + (args.imm12 as u64).sign_extend(64 - 12) as VAddr;
+                let addr = rs1v.wrapping_add((args.imm12 as u64).sign_extend(64 - 12) as VAddr);
                 Stage::MEMORY(MemoryAccess::WRITE32(addr, rs2v as u32))
             },
         }
@@ -118,7 +119,8 @@ impl Display for Instruction<Stype> {
         }
     }
 }
-impl InstructionExcecutor for Instruction<Stype> {
+
+impl InstructionExcecutor<Stype> for Instruction<Stype> {
     fn run(&self, core: &mut Core) -> Stage {
         instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())

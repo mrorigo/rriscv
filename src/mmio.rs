@@ -43,9 +43,9 @@ pub struct UartState {
     interrupting: bool,
 }
 
-const IER_RXINT_BIT: u8 = 0x1;
-const IER_THREINT_BIT: u8 = 0x2;
-const LSR_THR_EMPTY: u8 = 0x20;
+const IER_RX_ENABLE_BIT: u8 = 0x1;
+const IER_TX_ENABLE_BIT: u8 = 0x2;
+const LSR_TX_IDLE: u8 = 1 << 5;
 
 impl UART {
     pub fn create(range: MemoryRange) -> UART {
@@ -72,12 +72,12 @@ impl UART {
         state.clock = state.clock.wrapping_add(1);
         let mut rx_ip = false;
         if (state.clock % 0x10) == 0 && state.thr != 0 {
-            println!("terminal.put_byte: {}", state.thr);
+            eprint!("{}", state.thr as char);
             //            state.terminal.put_byte(state.thr);
             state.thr = 0;
-            state.lsr |= LSR_THR_EMPTY;
-            (_, rx_ip) = UART::update_iir(false, false, &mut state);
-            if (state.ier & IER_THREINT_BIT) != 0 {
+            (_, rx_ip) = UART::update_iir(false, &mut state);
+            state.lsr |= LSR_TX_IDLE;
+            if (state.ier & IER_TX_ENABLE_BIT) != 0 {
                 state.thre_ip = true;
             }
         }
@@ -90,22 +90,21 @@ impl UART {
         }
     }
 
-    fn update_iir(is_load: bool, is_store: bool, state: &mut UartState) -> (u8, bool) {
+    fn update_iir(is_load: bool, state: &mut UartState) -> (u8, bool) {
         let rbr = state.rbr;
         if is_load {
             state.rbr = 0;
             state.lsr &= !0x1; // Data Available
-        } else if is_store {
-            state.lsr &= !LSR_THR_EMPTY;
         }
 
-        let rx_ip = (state.ier & IER_RXINT_BIT) != 0 && state.rbr != 0;
-        let thre_ip = (state.ier & IER_THREINT_BIT) != 0 && state.thr == 0;
+        let rx_ip = (state.ier & IER_RX_ENABLE_BIT) != 0 && state.rbr != 0;
+        let thre_ip = (state.ier & IER_TX_ENABLE_BIT) != 0 && state.thr == 0;
 
-        // Which should be prioritized RX interrupt or THRE interrupt?
+        // Which should be prioritized? RX or THRE interrupt?
         if rx_ip {
             state.iir = UartIirMask::RdAvail;
         } else if thre_ip {
+            eprint!("thre_ip");
             state.iir = UartIirMask::ThrEmpty;
         } else {
             state.iir = UartIirMask::NoIrq;
@@ -128,12 +127,13 @@ impl VirtualDevice for UART {
         let mut state = self.state.borrow_mut();
         let lcr = state.lcr >> 7;
         let offs = addr - self.range.start;
-        println!("UART out @ {:#x?}: {}", offs, value);
+        // println!("UART out @ {:#x?}: {}", offs, value);
         match offs {
             0 => match lcr == 0 {
                 true => {
                     state.thr = value;
-                    UART::update_iir(false, true, &mut state);
+                    UART::update_iir(false, &mut state);
+                    state.lsr &= !LSR_TX_IDLE;
                 }
                 false => {} // @TODO: Implement properly
             },
@@ -141,14 +141,15 @@ impl VirtualDevice for UART {
                 true => {
                     // This bahavior isn't written in the data sheet
                     // but some drivers seem to rely on it.
-                    if (state.ier & IER_THREINT_BIT) == 0
-                        && (value & IER_THREINT_BIT) != 0
+                    if (state.ier & IER_TX_ENABLE_BIT) == 0
+                        && (value & IER_TX_ENABLE_BIT) != 0
                         && state.thr == 0
                     {
                         state.thre_ip = true;
                     }
                     state.ier = value;
-                    UART::update_iir(false, true, &mut state);
+                    UART::update_iir(false, &mut state);
+                    state.lsr &= !LSR_TX_IDLE;
                 }
                 false => {} // @TODO: Implement properly
             },
@@ -175,7 +176,7 @@ impl VirtualDevice for UART {
         let offs = addr - self.range.start;
         match offs {
             0 => match (lcr >> 7) == 0 {
-                true => UART::update_iir(true, false, &mut state).0,
+                true => UART::update_iir(true, &mut state).0,
                 false => 0, // @TODO: DLL divisor latch LSB
             },
             1 => match (lcr >> 7) == 0 {
@@ -185,7 +186,7 @@ impl VirtualDevice for UART {
             2 => state.iir as u8,
             3 => state.lcr,
             4 => state.mcr,
-            5 => state.lsr,
+            5 => state.lsr | 0x20,
             7 => state.scr,
             _ => 0,
         }
@@ -273,12 +274,20 @@ pub trait VirtualDevice: std::fmt::Debug {
 // }
 
 impl MemoryOperations<PhysicalMemory, u8> for PhysicalMemory {
-    fn read_single(&self, addr: VAddr) -> Option<u8> {
-        self.ram.read_single(addr)
+    fn read8(&self, addr: VAddr) -> Option<u8> {
+        self.ram.read8(addr)
     }
 
-    fn write_single(&mut self, addr: VAddr, value: u8) -> bool {
-        self.ram.write_single(addr, value)
+    fn write8(&mut self, addr: VAddr, value: u8) -> bool {
+        self.ram.write8(addr, value)
+    }
+
+    fn read32(&self, addr: VAddr) -> Option<u32> {
+        self.ram.read32(addr)
+    }
+
+    fn write32(&mut self, addr: VAddr, value: u32) {
+        self.ram.write32(addr, value)
     }
 }
 
@@ -309,21 +318,29 @@ impl VirtualDevice for PLIC {
     }
 
     fn write(&mut self, addr: VAddr, value: u8) -> bool {
-        self.ram.write_single(addr, value)
+        self.ram.write8(addr, value)
     }
 
     fn read(&self, addr: VAddr) -> u8 {
-        self.ram.read_single(addr).unwrap()
+        self.ram.read8(addr).unwrap()
     }
 }
 
 impl MemoryOperations<CLINT, u8> for CLINT {
-    fn read_single(&self, addr: VAddr) -> Option<u8> {
-        self.ram.read_single(addr)
+    fn read8(&self, addr: VAddr) -> Option<u8> {
+        self.ram.read8(addr)
     }
 
-    fn write_single(&mut self, addr: VAddr, value: u8) -> bool {
-        self.ram.write_single(addr, value)
+    fn write8(&mut self, addr: VAddr, value: u8) -> bool {
+        self.ram.write8(addr, value)
+    }
+
+    fn read32(&self, addr: VAddr) -> Option<u32> {
+        todo!()
+    }
+
+    fn write32(&mut self, addr: VAddr, value: u32) {
+        self.ram.write32(addr, value)
     }
 }
 
@@ -337,11 +354,11 @@ impl VirtualDevice for CLINT {
     }
 
     fn write(&mut self, addr: VAddr, value: u8) -> bool {
-        self.ram.write_single(addr, value)
+        self.ram.write8(addr, value)
     }
 
     fn read(&self, addr: VAddr) -> u8 {
-        self.ram.read_single(addr).unwrap()
+        self.ram.read8(addr).unwrap()
     }
 }
 

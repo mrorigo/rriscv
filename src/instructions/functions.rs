@@ -31,7 +31,7 @@ pub enum Funct5 {
 #[repr(u8)]
 pub enum Funct7 {
     B0000000 = 0b0000000,
-    RV32M = 0b0000001,
+    M_EXT = 0b0000001, // RV32M/RM64M
     B0100000 = 0b0100000,
 }
 
@@ -97,6 +97,13 @@ pub enum OpImm32_Funct3 {
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, FromPrimitive)]
 #[repr(u8)]
+pub enum Op32_Funct3 {
+    ADDW_SUBW = 0b000,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, FromPrimitive)]
+#[repr(u8)]
 pub enum MiscMem_Funct3 {
     FENCE = 0b000,
     FENCE_I = 0b001,
@@ -137,6 +144,16 @@ pub enum RV32M_Funct3 {
     DIVU = 0b101,
     REM = 0b110,
     REMU = 0b111,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, FromPrimitive)]
+pub enum RV64M_Funct3 {
+    MULW = 0b000,
+    DIVW = 0b100,
+    DIVUW = 0b101,
+    REMW = 0b110,
+    REMUW = 0b111,
 }
 
 #[allow(non_camel_case_types)]

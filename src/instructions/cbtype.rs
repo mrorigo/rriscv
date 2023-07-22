@@ -11,7 +11,7 @@ use super::{
     functions::{C1_Funct3, Funct3},
     opcodes::CompressedOpcode,
     CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder, Instruction,
-    InstructionExcecutor, InstructionSelector,
+    InstructionExcecutor, InstructionFormatType, InstructionSelector, InstructionType,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -23,6 +23,7 @@ pub struct CBtype {
     pub imm6: u8,
 }
 
+impl InstructionFormatType for CBtype {}
 impl CompressedFormatType for CBtype {}
 
 impl CompressedFormatDecoder<CBtype> for CBtype {
@@ -118,7 +119,8 @@ impl InstructionSelector<CBtype> for CBtype {
         }
     }
 }
-impl InstructionExcecutor for Instruction<CBtype> {
+
+impl InstructionExcecutor<CBtype> for Instruction<CBtype> {
     fn run(&self, core: &mut Core) -> Stage {
         instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())

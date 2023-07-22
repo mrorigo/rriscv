@@ -43,13 +43,13 @@ pub struct MMU {
 
 impl MemoryOperations<MMU, u8> for MMU {
     // @TODO: Optimize this?
-    fn read_single(&self, addr: VAddr) -> Option<u8> {
+    fn read8(&self, addr: VAddr) -> Option<u8> {
         if self.memory.includes(addr) {
-            self.memory.read_single(addr)
+            self.memory.read8(addr)
         } else if self.uart.includes(addr) {
             Some(self.uart.read(addr))
         } else if self.clint.includes(addr) {
-            self.clint.read_single(addr)
+            self.clint.read8(addr)
         } else if self.plic.includes(addr) {
             todo!("PLIC I/O")
         } else if self.virtio.includes(addr) {
@@ -60,19 +60,40 @@ impl MemoryOperations<MMU, u8> for MMU {
     }
 
     // @TODO: Optimize this?
-    fn write_single(&mut self, addr: VAddr, value: u8) -> bool {
+    fn write8(&mut self, addr: VAddr, value: u8) -> bool {
         if self.memory.includes(addr) {
-            self.memory.write_single(addr, value)
+            self.memory.write8(addr, value)
         } else if self.uart.includes(addr) {
             self.uart.write(addr, value)
         } else if self.clint.includes(addr) {
-            self.clint.write_single(addr, value)
+            self.clint.write8(addr, value)
         } else if self.plic.includes(addr) {
             todo!("PLIC I/O")
         } else if self.virtio.includes(addr) {
             todo!("VIRTIO I/O")
         } else {
             panic!("{:#x?} is not mapped to memory", addr)
+        }
+    }
+
+    fn read32(&self, addr: VAddr) -> Option<u32> {
+        if self.memory.includes(addr) {
+            self.memory.read32(addr)
+        } else {
+            panic!("write32 only supported for RAM memory")
+        }
+    }
+
+    fn write32(&mut self, addr: VAddr, value: u32) {
+        if self.memory.includes(addr) {
+            self.memory.write32(addr, value)
+        } else if self.clint.includes(addr) {
+            self.clint.write32(addr, value)
+        } else {
+            panic!(
+                "write32 only supported for CLINT & RAM memory: {:#x?}",
+                addr
+            )
         }
     }
 }

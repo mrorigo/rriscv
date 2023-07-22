@@ -9,7 +9,7 @@ use super::{
     functions::{C0_Funct3, Funct3},
     opcodes::CompressedOpcode,
     CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder, Instruction,
-    InstructionExcecutor, InstructionSelector,
+    InstructionExcecutor, InstructionFormatType, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -21,6 +21,7 @@ pub struct CLtype {
     pub funct3: Funct3,
 }
 
+impl InstructionFormatType for CLtype {}
 impl CompressedFormatType for CLtype {}
 
 impl CompressedFormatDecoder<CLtype> for CLtype {
@@ -89,7 +90,8 @@ impl InstructionSelector<CLtype> for CLtype {
         }
     }
 }
-impl InstructionExcecutor for Instruction<CLtype> {
+
+impl InstructionExcecutor<CLtype> for Instruction<CLtype> {
     fn run(&self, core: &mut Core) -> Stage {
         instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())

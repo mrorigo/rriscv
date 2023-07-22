@@ -11,7 +11,7 @@ use super::{
     functions::{C0_Funct3, Funct3},
     opcodes::CompressedOpcode,
     CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder, Instruction,
-    InstructionExcecutor, InstructionSelector,
+    InstructionExcecutor, InstructionFormatType, InstructionSelector,
 };
 
 /// This instruction format is shared between C0 and C1 ops, hence it
@@ -28,13 +28,15 @@ pub struct CStype {
     pub funct3: Funct3,
 }
 
+impl InstructionFormatType for CStype {}
+impl CompressedFormatType for CStype {}
+
 impl ImmediateDecoder<u16, u8> for CStype {
     fn decode_immediate(i: u16) -> u8 {
         (((i >> 7) & 0x38) | ((i << 1) & 0xc0)) as u8
     }
 }
 
-impl CompressedFormatType for CStype {}
 impl CompressedFormatDecoder<CStype> for CStype {
     fn decode(word: u16) -> CStype {
         CStype {
@@ -169,7 +171,7 @@ impl InstructionSelector<CStype> for CStype {
     }
 }
 
-impl InstructionExcecutor for Instruction<CStype> {
+impl InstructionExcecutor<CStype> for Instruction<CStype> {
     fn run(&self, core: &mut Core) -> Stage {
         instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())

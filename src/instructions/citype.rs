@@ -11,7 +11,7 @@ use super::{
     functions::{C1_Funct3, C2_Funct3, Funct3},
     opcodes::CompressedOpcode,
     CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder, Instruction,
-    InstructionExcecutor, InstructionSelector,
+    InstructionExcecutor, InstructionFormatType, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -23,6 +23,7 @@ pub struct CItype {
     pub word: u16, // @FIXME: We need the original word here for ADDI16SP, which has a different immediate format
 }
 
+impl InstructionFormatType for CItype {}
 impl CompressedFormatType for CItype {}
 
 impl CompressedFormatDecoder<CItype> for CItype {
@@ -132,7 +133,11 @@ impl Instruction<CItype> {
                     "C.LDSP: sp={:#x?} ze_imm={:#x?} addr={:#x?}",
                     sp, ze_imm, addr
                 ));
-                Stage::MEMORY(crate::pipeline::MemoryAccess::READ64(addr, args.rs1_rd))
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ64(
+                    addr,
+                    args.rs1_rd,
+                    false,
+                ))
             },
         }
     }
@@ -201,9 +206,9 @@ impl InstructionSelector<CItype> for CItype {
     }
 }
 
-impl InstructionExcecutor for Instruction<CItype> {
+impl InstructionExcecutor<CItype> for Instruction<CItype> {
     fn run(&self, core: &mut Core) -> Stage {
-        instruction_trace!(println!("EXEC: {}", self.to_string()));
+        instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }

@@ -9,7 +9,7 @@ use super::{
     functions::{C0_Funct3, Funct3},
     opcodes::CompressedOpcode,
     CompressedFormatDecoder, CompressedFormatType, Instruction, InstructionExcecutor,
-    InstructionSelector,
+    InstructionFormatType, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -20,6 +20,7 @@ pub struct CIWtype {
     pub funct3: Funct3,
 }
 
+impl InstructionFormatType for CIWtype {}
 impl CompressedFormatType for CIWtype {}
 
 impl CompressedFormatDecoder<CIWtype> for CIWtype {
@@ -69,7 +70,8 @@ impl InstructionSelector<CIWtype> for CIWtype {
         }
     }
 }
-impl InstructionExcecutor for Instruction<CIWtype> {
+
+impl InstructionExcecutor<CIWtype> for Instruction<CIWtype> {
     fn run(&self, core: &mut Core) -> Stage {
         instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())

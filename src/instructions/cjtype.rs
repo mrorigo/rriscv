@@ -1,10 +1,13 @@
+use std::fmt::Display;
+
 use quark::Signs;
 
 use crate::{cpu::Core, pipeline::Stage};
 
 use super::{
     functions::C1_Funct3, opcodes::CompressedOpcode, CompressedFormatDecoder, CompressedFormatType,
-    ImmediateDecoder, Instruction, InstructionExcecutor, InstructionSelector,
+    ImmediateDecoder, Instruction, InstructionExcecutor, InstructionFormatType,
+    InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -12,6 +15,17 @@ pub struct CJtype {
     pub opcode: CompressedOpcode,
     pub offset: u16,
     pub funct3: u8,
+}
+
+impl Display for Instruction<CJtype> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.args.is_some() {
+            write!(f, "{}", self.mnemonic)
+        } else {
+            let args = self.args.unwrap();
+            write!(f, "{} x{}", self.mnemonic, args.offset)
+        }
+    }
 }
 
 #[allow(non_snake_case)]
@@ -36,6 +50,7 @@ impl Instruction<CJtype> {
     }
 }
 
+impl InstructionFormatType for CJtype {}
 impl CompressedFormatType for CJtype {}
 
 impl CompressedFormatDecoder<CJtype> for CJtype {
@@ -76,8 +91,10 @@ impl InstructionSelector<CJtype> for CJtype {
         }
     }
 }
-impl InstructionExcecutor for Instruction<CJtype> {
+
+impl InstructionExcecutor<CJtype> for Instruction<CJtype> {
     fn run(&self, core: &mut Core) -> Stage {
+        instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }

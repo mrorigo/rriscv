@@ -60,7 +60,7 @@ pub const FORMAT_MAP: [InstructionFormat; 128] = [
     InstructionFormat::Unknown, /*0111000 */
     InstructionFormat::Unknown, /*0111001 */
     InstructionFormat::Unknown, /*0111010 */
-    InstructionFormat::Unknown, /*0111011 */
+    InstructionFormat::R,       /*0111011 = SUBW (RV64I-only) */
     InstructionFormat::Unknown, /*0111100 */
     InstructionFormat::Unknown, /*0111101 */
     InstructionFormat::Unknown, /*0111110 */

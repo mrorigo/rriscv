@@ -108,8 +108,6 @@ impl InstructionDecoder for Core {
                         _ => {
                             let rs2 = ((word >> 2) & 31) as u8;
                             let funct1 = ((word >> 12) & 1) as u8;
-                            println!("funct3 for c2: {:?}", funct3);
-                            println!("funct1 for c2: {:?}", funct1);
                             match funct1 {
                                 0 => CompressedFormat::CR, // C.JR
                                 _ => match rs2 {

@@ -1,4 +1,5 @@
 use elfloader::VAddr;
+use quark::Signs;
 
 use crate::{
     cpu::{CSRRegister, Core, PrivMode, Register, RegisterValue},
@@ -12,19 +13,20 @@ use crate::{
 
 macro_rules! pipeline_trace {
     ($instr:expr) => {
-        print!("PIPELINE: ");
+        print!("P: ");
         $instr;
     };
 }
 
+#[allow(non_camel_case_types)]
 #[derive(Debug, Copy, Clone)]
 pub enum MemoryAccess {
-    AMOSWAP_W(VAddr, VAddr, Register),
+    AMOSWAP_W(VAddr, RegisterValue, Register),
     AMOSWAP_D(VAddr, VAddr, Register),
     READ8(VAddr, Register),
     READ16(VAddr, Register),
     READ32(VAddr, Register),
-    READ64(VAddr, Register),
+    READ64(VAddr, Register, bool),
     WRITE8(VAddr, u8),
     WRITE16(VAddr, u16),
     WRITE32(VAddr, u32),
@@ -52,7 +54,7 @@ pub struct WritebackStage {
     pub value: u64,
 }
 
-#[derive(Debug)]
+//#[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum Stage {
     ENTER_TRAP,
@@ -88,33 +90,34 @@ pub trait PipelineStages {
 
 impl PipelineStages for Core {
     fn fetch(&mut self, mmu: &mut MMU) -> Stage {
-        let instruction = mmu.read_32(self.pc).unwrap();
+        let instruction = mmu.read_32(self.pc()).unwrap();
 
         // Determine if instruction is compressed
         let instruction = match (instruction & 0x3) == 0x03 {
             true => {
                 pipeline_trace!(println!(
-                    "fetch:     instruction @ {:#x}: {:#x}",
-                    self.pc, instruction
+                    "f:     instruction @ {:#x}: {:#x}",
+                    self.pc(),
+                    instruction
                 ));
-                self.pc += 4;
+                self.add_pc(4);
                 RawInstruction {
                     compressed: false,
                     word: instruction,
-                    pc: self.pc - 4,
+                    pc: self.pc() - 4,
                 }
             }
             false => {
-                pipeline_trace!(println!(
-                    "fetch:     instruction @ {:#x?}: {:#x?} (compressed)",
-                    self.pc,
-                    instruction & 0xffff,
-                ));
-                self.pc += 2;
+                // pipeline_trace!(println!(
+                //     "f:     instruction @ {:#x?}: {:#x?} (C)",
+                //     self.pc(),
+                //     instruction & 0xffff,
+                // ));
+                self.add_pc(2);
                 RawInstruction {
                     compressed: true,
                     word: instruction & 0xffff,
-                    pc: self.pc - 2,
+                    pc: self.pc() - 2,
                 }
             }
         };
@@ -124,7 +127,8 @@ impl PipelineStages for Core {
     fn decode(&mut self, instruction: &RawInstruction) -> Stage {
         self.prev_pc = instruction.pc;
         let decoded = (self as &dyn InstructionDecoder).decode_instruction(*instruction);
-        pipeline_trace!(println!("decode:    {:?}", decoded));
+        pipeline_trace!(println!("d:    {:?}", decoded));
+
         Stage::EXECUTE(decoded)
     }
 
@@ -150,8 +154,8 @@ impl PipelineStages for Core {
     fn memory(&mut self, mmu: &mut MMU, memory_access: &MemoryAccess) -> Stage {
         match *memory_access {
             MemoryAccess::READ8(offset, register) => {
-                let value = mmu.read_single(offset).unwrap();
-                pipeline_trace!(println!("memory:    READ8 @ {:#x?}: {:#x?}", offset, value));
+                let value = mmu.read8(offset).unwrap();
+                pipeline_trace!(println!("m:    READ8 @ {:#x?}: {:#x?}", offset, value));
 
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: register,
@@ -168,22 +172,23 @@ impl PipelineStages for Core {
             }
             MemoryAccess::READ32(offset, register) => {
                 let value = mmu.read_32(offset).unwrap();
-                pipeline_trace!(println!(
-                    "memory:    READ32 @ {:#x?}: {:#x?}",
-                    offset, value
-                ));
+                pipeline_trace!(println!("m:    READ32 @ {:#x?}: {:#x?}", offset, value));
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: register,
                     value: value as u64,
                 }))
             }
-            MemoryAccess::READ64(offset, register) => {
-                let l = mmu.read_32(offset).unwrap();
-                let h = mmu.read_32(offset + 4).unwrap();
-                let value = ((h as u64) << 32) | l as u64;
+            MemoryAccess::READ64(offset, register, sign_extend) => {
+                let h = mmu.read_32(offset).unwrap();
+                let l = mmu.read_32(offset + 4).unwrap();
+                let comp = ((h as u64) << 32) | l as u64;
+                let value = match sign_extend {
+                    true => comp.sign_extend(64 - 32),
+                    false => comp as u64,
+                };
                 pipeline_trace!(println!(
-                    "memory:    READ64 @ {:#x?}: {:#x?}",
-                    offset, value
+                    "m:    READ64 @ {:#x?}: {:#x?} ({:?})",
+                    offset, value, sign_extend
                 ));
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: register,
@@ -191,42 +196,39 @@ impl PipelineStages for Core {
                 }))
             }
             MemoryAccess::WRITE8(offset, value) => {
-                pipeline_trace!(println!("memory:    WRITE8 @ {:#x?}: {:#x}", offset, value));
-                mmu.write_single(offset, value);
+                pipeline_trace!(println!("m:    WRITE8 @ {:#x?}: {:#x}", offset, value));
+                mmu.write8(offset, value);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE16(_offset, _value) => {
                 todo!();
-                // mmu.write_single(offset + 1, (value & 0xff) as u8);
-                // mmu.write_single(offset, (value >> 8) as u8);
-                // Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE32(offset, value) => {
-                pipeline_trace!(println!(
-                    "memory:    WRITE32 @ {:#x?}: {:#?}",
-                    offset, value
-                ));
+                pipeline_trace!(println!("m:    WRITE32 @ {:#x?}: {:#x?}", offset, value));
                 mmu.write_32(offset, value);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE64(offset, value) => {
-                pipeline_trace!(println!(
-                    "memory:    WRITE64 @ {:#x?}: {:#x?}",
-                    offset, value
-                ));
-                mmu.write_32(offset, value as u32);
-                mmu.write_32(offset + 4, (value >> 32) as u32);
-                // pipeline_trace!(println!("memory::WRITE64: {:#x?} @ {:#x?}", value, offset));
-                // self.mmu
-                //     .write_single(offset, value as u64, MemoryAccessWidth::LONG);
+                pipeline_trace!(println!("m:    WRITE64 @ {:#x?}: {:#x?}", offset, value));
+                mmu.write_32(offset + 4, value as u32);
+                mmu.write_32(offset + 0, (value >> 32) as u32);
                 Stage::WRITEBACK(None)
             }
-            MemoryAccess::AMOSWAP_W(from, to, rd) => {
+            MemoryAccess::AMOSWAP_W(from, rs2v, rd) => {
                 let v1 = mmu.read_32(from).unwrap();
-                let v2 = mmu.read_32(to).unwrap();
-                mmu.write_32(to, v1);
-                mmu.write_32(from, v2);
-                Stage::writeback(rd, v1 as u64)
+                //let v2 = mmu.read_32(to).unwrap();
+                mmu.write_32(from, rs2v as u32);
+                pipeline_trace!(println!(
+                    "m:    AMOSWAP.W @ {:#x?} = {:#x?} now {:#x?}",
+                    from, v1, rs2v
+                ));
+                // "AMOs can be used to implement parallel reduction operations,
+                //   where typically the return value would be discarded by writing to x0."
+                if rd == 0 {
+                    Stage::WRITEBACK(None)
+                } else {
+                    Stage::writeback(rd, v1 as u64)
+                }
             }
             MemoryAccess::AMOSWAP_D(_from, _to, _rd) => todo!(),
         }
@@ -235,7 +237,7 @@ impl PipelineStages for Core {
     fn writeback(&mut self, writeback: Option<WritebackStage>) -> Stage {
         match writeback {
             Some(wb) => {
-                pipeline_trace!(println!("writeback: x{} = {:#x?}", wb.register, wb.value));
+                pipeline_trace!(println!("w: x{} = {:#x?}", wb.register, wb.value));
 
                 self.write_register(wb.register, wb.value)
             }

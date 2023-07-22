@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use elfloader::VAddr;
 
@@ -13,7 +13,7 @@ type CSRRegisters = [RegisterValue; 4096];
 
 macro_rules! cpu_trace {
     ($instr:expr) => {
-        print!("CPU: ");
+        print!("C:");
         $instr;
     };
 }
@@ -101,24 +101,21 @@ pub enum CSRRegister {
     mconfigptr = 0xf15,
 }
 
-//#[derive(Debug)]
 pub struct Core {
     pub id: u64,
     pub xlen: Xlen,
     registers: Registers,
     csrs: CSRRegisters,
     pmode: PrivMode,
-    //    pub mmu: RefCell<&'a mut dyn RAMOperations<MMU>>,
-    pub pc: u64,
+    pc: u64,
     pub prev_pc: u64,
     pub stage: Stage,
     pub cycles: u64,
     pub symbols: HashMap<VAddr, String>,
+    pub symboltrace: VecDeque<(VAddr, String)>,
 }
 
 impl Core {
-    //    pub fn create(id: u64, mmu: RefCell<&'a mut impl RAMOperations<MMU>>) -> Core<'a> {
-    //        pub fn create(id: u64, mmu: RefCell<&'a mut impl RAMOperations<MMU>>) -> Core<'a> {
     pub fn create(id: u64) -> Core {
         let registers: [RegisterValue; 32] = [0; 32];
         let mut csrs: [RegisterValue; 4096] = [0; 4096];
@@ -130,17 +127,17 @@ impl Core {
             registers,
             csrs,
             pmode: PrivMode::Machine,
-            //mmu,
             pc: 0,
             prev_pc: 0,
             cycles: 0,
             stage: Stage::FETCH,
             symbols: HashMap::new(),
+            symboltrace: VecDeque::<(VAddr, String)>::new(),
         }
     }
 
     pub fn add_symbol(&mut self, addr: VAddr, name: String) {
-        println!("cpu: Adding symbol {:?} = {:#x?}", name, addr);
+        //println!("cpu: Adding symbol {:?} = {:#x?}", name, addr);
         self.symbols.insert(addr, name);
     }
 
@@ -153,48 +150,62 @@ impl Core {
         self.pc
     }
 
-    fn find_closest_symbol(&self, addr: VAddr) -> String {
+    pub fn add_pc(&mut self, offs: u64) {
+        self.pc += offs
+    }
+
+    #[allow(dead_code)]
+    fn find_closest_symbol(&self, addr: VAddr) -> Option<(u64, String)> {
         match self.symbols.get(&addr) {
-            Some(symbol) => symbol.clone(),
+            Some(symbol) => Some((addr, symbol.clone())),
             None => {
-                let unknown_str = "<unknown>".to_string();
-                let unknown = Some(unknown_str);
-                let mut closest = None;
-                // let mut second = None;
-                let mut closest_dist = 1e6 as u64;
-                // let mut second_dist = 1e6 as u64;
-                for sym in self.symbols.iter() {
-                    let dist = i64::abs(addr as i64 - *sym.0 as i64) as u64;
-                    // println!(
-                    //     "dist from {:#x?} to {:?}@{:#x?} is {}",
-                    //     pc, sym.1, sym.0, dist
-                    // );
-                    if dist < closest_dist && dist > 0 && *sym.0 < addr {
-                        // second = closest.clone();
-                        // second_dist = closest_dist;
-                        closest = Some(sym.1.clone());
-                        closest_dist = dist;
-                        // println!(
-                        //     "dist from {:#x?} to {:?}@{:#x?} is {}",
-                        //     pc, sym.1, sym.0, dist
-                        // );
-                    }
-                }
-                if closest.is_some() {
-                    closest.unwrap()
-                } else {
-                    unknown.unwrap()
-                }
+                None
+                // let unknown_str = "<unknown>".to_string();
+                // let unknown = Some(unknown_str);
+                // let mut closest = None;
+                // let mut closest_dist = 1e6 as u64;
+                // for sym in self.symbols.iter() {
+                //     let dist = i64::abs(addr as i64 - *sym.0 as i64) as u64;
+                //     if dist < closest_dist && dist > 0 && *sym.0 < addr {
+                //         closest = Some(sym.clone()); //sym.1.clone());
+                //         closest_dist = dist;
+                //     }
+                // }
+                // if closest.is_some() {
+                //     Some((*closest.unwrap().0, closest.unwrap().1.clone()))
+                // } else {
+                //     None
+                // }
             }
         }
     }
 
     pub fn set_pc(&mut self, pc: u64) {
-        let name = self.find_closest_symbol(pc);
-        cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, name));
+        let symbol = self.find_closest_symbol(pc);
+        let last_st = self.symboltrace.back();
+        match symbol {
+            Some(sym) => {
+                cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, sym.1));
+                match last_st {
+                    Some((_last_addr, last_symbol)) => {
+                        if sym.0 == pc && last_symbol.ne(&sym.1) {
+                            //println!("Push symboltrace: {:?}@{:#x?}", sym.1, sym.0);
+                            self.symboltrace.push_back((pc, sym.1));
+                            if self.symboltrace.len() > 20 {
+                                self.symboltrace.pop_front();
+                            }
+                        }
+                    }
+                    None => {
+                        self.symboltrace.push_back((pc, sym.1));
+                    }
+                }
+            }
+            None => {}
+        }
         // assert!(
         //     name != "end",
-        //     "Reachend 'end' symbol. This usually means your program is over. Be happy!"
+        //     "Reached 'end' symbol. This usually means your program is over. Be happy!"
         // );
         self.pc = pc;
     }
@@ -213,10 +224,12 @@ impl Core {
     /// Extends a value depending on XLEN. If in 32-bit mode, will extend the 31st bit
     /// across all bits above it. In 64-bit mode, this is a no-op.
     pub fn bit_extend(&self, value: i64) -> i64 {
-        match self.xlen {
-            Xlen::Bits32 => value as i32 as i64,
+        let res = match self.xlen {
+            Xlen::Bits32 => ((value as i32) as u32 & 0xffffffff) as i64,
             Xlen::Bits64 => value,
-        }
+        };
+        //println!("bit_extend ({:?}) {:#x?} => {:#x?}", self.xlen, value, res);
+        res
     }
 
     pub fn read_csr(&self, reg: CSRRegister) -> RegisterValue {
@@ -230,7 +243,7 @@ impl Core {
             // CSRRegister::time => self.mmu.get_clint().read_mtime(),
             _ => self.csrs[reg as usize],
         };
-        //        cpu_trace!(println!("read_csr {:#x?} = {:#x?}", reg, value));
+        //cpu_trace!(println!("read_csr {:#x?} = {:#x?}", reg, value));
 
         value
     }

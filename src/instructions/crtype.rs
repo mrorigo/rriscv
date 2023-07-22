@@ -7,7 +7,7 @@ use crate::{
 
 use super::{
     functions::Funct3, opcodes::CompressedOpcode, CompressedFormatDecoder, CompressedFormatType,
-    Instruction, InstructionExcecutor, InstructionSelector,
+    Instruction, InstructionExcecutor, InstructionFormatType, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -19,6 +19,7 @@ pub struct CRtype {
     pub funct3: Funct3,
 }
 
+impl InstructionFormatType for CRtype {}
 impl CompressedFormatType for CRtype {}
 
 impl CompressedFormatDecoder<CRtype> for CRtype {
@@ -109,7 +110,7 @@ impl InstructionSelector<CRtype> for CRtype {
     }
 }
 
-impl InstructionExcecutor for Instruction<CRtype> {
+impl InstructionExcecutor<CRtype> for Instruction<CRtype> {
     fn run(&self, core: &mut Core) -> Stage {
         instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())

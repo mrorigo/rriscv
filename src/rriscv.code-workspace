@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../../git/xv6-riscv"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"random": "c"
+		}
+	}
+}

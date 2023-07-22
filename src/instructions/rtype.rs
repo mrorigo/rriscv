@@ -6,9 +6,10 @@ use crate::{
 };
 
 use super::{
-    functions::{Funct3, Funct5, Funct7, Op_Funct3, RV32M_Funct3},
+    functions::{Funct3, Funct5, Funct7, Op32_Funct3, Op_Funct3, RV32M_Funct3, RV64M_Funct3},
     opcodes::MajorOpcode,
     FormatDecoder, Instruction, InstructionExcecutor, InstructionFormatType, InstructionSelector,
+    InstructionType, UncompressedFormatType,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -23,6 +24,7 @@ pub struct Rtype {
 }
 
 impl InstructionFormatType for Rtype {}
+impl UncompressedFormatType for Rtype {}
 
 impl FormatDecoder<Rtype> for Rtype {
     fn decode(word: u32) -> Rtype {
@@ -57,23 +59,23 @@ impl Display for Instruction<Rtype> {
 
 #[allow(non_snake_case)]
 impl Instruction<Rtype> {
-    pub fn ADD(itype: &Rtype) -> Instruction<Rtype> {
+    pub fn ADD(args: &Rtype) -> Instruction<Rtype> {
         Instruction {
             mnemonic: &"ADD",
-            args: Some(*itype),
+            args: Some(*args),
             funct: |core, args| {
-                let r1v = core.read_register(args.rs1);
-                let r2v = core.read_register(args.rs2);
-                let value = core.bit_extend((r1v + r2v) as i64) as u64;
+                let r1v = core.read_register(args.rs1) as i64;
+                let r2v = core.read_register(args.rs2) as i64;
+                let value = core.bit_extend(r1v.wrapping_add(r2v) as i64) as u64;
                 Stage::writeback(args.rd, value)
             },
         }
     }
 
-    pub fn AND(itype: &Rtype) -> Instruction<Rtype> {
+    pub fn AND(args: &Rtype) -> Instruction<Rtype> {
         Instruction {
             mnemonic: &"AND",
-            args: Some(*itype),
+            args: Some(*args),
             funct: |core, args| {
                 let r1v = core.read_register(args.rs1);
                 let r2v = core.read_register(args.rs2);
@@ -83,10 +85,10 @@ impl Instruction<Rtype> {
         }
     }
 
-    pub fn OR(itype: &Rtype) -> Instruction<Rtype> {
+    pub fn OR(args: &Rtype) -> Instruction<Rtype> {
         Instruction {
             mnemonic: &"OR",
-            args: Some(*itype),
+            args: Some(*args),
             funct: |core, args| {
                 let r1v = core.read_register(args.rs1);
                 let r2v = core.read_register(args.rs2);
@@ -96,10 +98,30 @@ impl Instruction<Rtype> {
         }
     }
 
-    pub fn MUL(itype: &Rtype) -> Instruction<Rtype> {
+    pub fn REMUW(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"REMUW",
+            args: Some(*args),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1);
+                let r2v = core.read_register(args.rs2);
+
+                let dividend = r1v as u32;
+                let divisor = r2v as u32;
+                let value = match divisor {
+                    0 => dividend as i32 as i64,
+                    _ => dividend.wrapping_rem(divisor) as i32 as i64,
+                };
+
+                Stage::writeback(args.rd, value as u64)
+            },
+        }
+    }
+
+    pub fn MUL(args: &Rtype) -> Instruction<Rtype> {
         Instruction {
             mnemonic: &"MUL",
-            args: Some(*itype),
+            args: Some(*args),
             funct: |core, args| {
                 let r1v = core.read_register(args.rs1);
                 let r2v = core.read_register(args.rs2);
@@ -109,10 +131,10 @@ impl Instruction<Rtype> {
         }
     }
 
-    pub fn MULH(itype: Rtype) -> Instruction<Rtype> {
+    pub fn MULH(args: Rtype) -> Instruction<Rtype> {
         Instruction {
             mnemonic: &"MULH",
-            args: Some(itype),
+            args: Some(args),
             funct: |core, args| {
                 let r1v = core.read_register(args.rs1);
                 let r2v = core.read_register(args.rs2);
@@ -124,8 +146,51 @@ impl Instruction<Rtype> {
             },
         }
     }
+
+    pub fn SUB(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"SUB",
+            args: Some(*args),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1);
+                let r2v = core.read_register(args.rs2);
+                let value = core.bit_extend((r2v - r1v) as i64) as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
+    pub fn SUBW(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"SUBW",
+            args: Some(*args),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1) as u32;
+                let r2v = core.read_register(args.rs2) as u32;
+                let value = core.bit_extend((r2v.wrapping_sub(r1v)) as i64) as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
+    pub fn SLTU(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"SLTU",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1) as u32;
+                let rs2v = core.read_register(args.rs2) as u32;
+                let value = match rs1v < rs2v {
+                    true => 1,
+                    false => 0,
+                };
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
 }
 
+#[allow(non_snake_case)]
 impl Instruction<Rtype> {
     pub fn AMOSWAP_W(args: &Rtype) -> Instruction<Rtype> {
         Instruction {
@@ -133,7 +198,7 @@ impl Instruction<Rtype> {
             args: Some(*args),
             funct: |core, args| {
                 let rs1v = core.read_register(args.rs1);
-                let rs2v = core.read_register(args.rs1);
+                let rs2v = core.read_register(args.rs2);
                 Stage::MEMORY(MemoryAccess::AMOSWAP_W(rs1v, rs2v, args.rd))
             },
         }
@@ -147,18 +212,36 @@ impl InstructionSelector<Rtype> for Rtype {
                 Funct5::AMOSWAP_W => Instruction::AMOSWAP_W(self),
                 _ => panic!(),
             },
+            MajorOpcode::OP_32 => match self.funct7 {
+                Funct7::M_EXT => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
+                    RV64M_Funct3::REMUW => Instruction::MUL(self),
+                    _ => Instruction::MUL(self),
+                },
+                _ => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
+                    Op32_Funct3::ADDW_SUBW => match self.funct7 {
+                        Funct7::B0000000 => todo!("ADDW"),
+                        Funct7::B0100000 => Instruction::SUBW(self),
+                        _ => panic!(),
+                    },
+                },
+            },
             MajorOpcode::OP => match self.funct7 {
                 // RV32M
-                Funct7::RV32M => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
+                Funct7::M_EXT => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                     RV32M_Funct3::MUL => Instruction::MUL(self),
                     _ => panic!(),
                 },
-                Funct7::B0100000 => todo!("SUB&SRA"),
+                Funct7::B0100000 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
+                    Op_Funct3::ADD_SUB => Instruction::SUB(self),
+                    Op_Funct3::SRL_SRA => todo!("SRA, since Funct7!=0"),
+                    _ => todo!("keine anung"),
+                },
                 Funct7::B0000000 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                     Op_Funct3::ADD_SUB => Instruction::ADD(self),
                     Op_Funct3::SRL_SRA => todo!("SRL, since Funct7=0"),
                     Op_Funct3::AND => Instruction::AND(self),
                     Op_Funct3::OR => Instruction::OR(self),
+                    Op_Funct3::SLTU => Instruction::SLTU(self),
                     _ => todo!(),
                 },
                 // _ => todo!("R-type Funct7 not supported"),
@@ -167,7 +250,8 @@ impl InstructionSelector<Rtype> for Rtype {
         }
     }
 }
-impl InstructionExcecutor for Instruction<Rtype> {
+
+impl InstructionExcecutor<Rtype> for Instruction<Rtype> {
     fn run(&self, core: &mut Core) -> Stage {
         instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())

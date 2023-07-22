@@ -9,24 +9,28 @@ use crate::{
 
 use super::{
     opcodes::MajorOpcode, FormatDecoder, Instruction, InstructionExcecutor, InstructionFormatType,
-    InstructionSelector,
+    InstructionSelector, UncompressedFormatType,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Utype {
     pub opcode: MajorOpcode,
     pub rd: Register,
-    pub imm20: u32,
+    pub imm: u64,
 }
 
 impl InstructionFormatType for Utype {}
+impl UncompressedFormatType for Utype {}
 
 impl FormatDecoder<Utype> for Utype {
     fn decode(word: u32) -> Utype {
         Utype {
             opcode: num::FromPrimitive::from_u8((word & 0x7f) as u8).unwrap(),
             rd: ((word >> 7) & 31) as Register,
-            imm20: (word >> 12),
+            imm: (match word & 0x80000000 {
+                0x80000000 => 0xffffffff00000000,
+                _ => 0,
+            } | ((word as u64) & 0xfffff000)) as u64,
         }
     }
 }
@@ -37,7 +41,7 @@ impl Display for Instruction<Utype> {
             write!(f, "{}", self.mnemonic)
         } else {
             let args = self.args.unwrap();
-            write!(f, "{} x{},{}", self.mnemonic, args.rd, args.imm20)
+            write!(f, "{} x{},{}", self.mnemonic, args.rd, args.imm)
         }
     }
 }
@@ -51,14 +55,7 @@ impl Instruction<Utype> {
             mnemonic: "AUIPC",
             args: Some(*utype),
             funct: |core, args| {
-                let se_imm20 = args.imm20.sign_extend(32 - 20);
-                // const M: u32 = 1 << (20 - 1);
-                // let se_imm20 = (args.imm20 ^ M) - M;
-                let value = core.prev_pc.wrapping_add((se_imm20 << 12) as u64) as u32;
-                // instruction_trace!(println!(
-                //     "AUIPC x{}, {:#x?}\t; pc={:#x?} x{}={:#x?}",
-                //     args.rd, se_imm20, core.prev_pc, args.rd, value
-                // ));
+                let value = core.prev_pc.wrapping_add((args.imm) as u64) as u32;
                 Stage::writeback(args.rd, value as u64)
             },
         }
@@ -69,10 +66,7 @@ impl Instruction<Utype> {
         Instruction {
             mnemonic: "LUI",
             args: Some(*utype),
-            funct: |_core, args| {
-                let value = (args.imm20 as u64) << 12;
-                Stage::writeback(args.rd, value)
-            },
+            funct: |_core, args| Stage::writeback(args.rd, args.imm),
         }
     }
 }
@@ -87,7 +81,7 @@ impl InstructionSelector<Utype> for Utype {
     }
 }
 
-impl InstructionExcecutor for Instruction<Utype> {
+impl InstructionExcecutor<Utype> for Instruction<Utype> {
     fn run(&self, core: &mut Core) -> Stage {
         instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
