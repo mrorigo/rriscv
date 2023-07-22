@@ -11,7 +11,7 @@ use super::{
     functions::{C1_Funct3, Funct3},
     opcodes::CompressedOpcode,
     CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder, Instruction,
-    InstructionExcecutor, InstructionFormatType, InstructionSelector, InstructionType,
+    InstructionExcecutor, InstructionFormatType, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]

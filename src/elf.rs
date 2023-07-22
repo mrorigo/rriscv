@@ -16,12 +16,12 @@ impl<'a> Loader<'a> {
 impl ElfLoader for Loader<'_> {
     fn allocate(&mut self, load_headers: LoadableHeaders) -> Result<(), ElfLoaderErr> {
         for header in load_headers {
-            println!(
-                "ELF load: allocate vaddr = {:#x} size = {:#x} flags = {}",
-                header.virtual_addr(),
-                header.mem_size(),
-                header.flags()
-            );
+            // println!(
+            //     "ELF load: allocate vaddr = {:#x} size = {:#x} flags = {}",
+            //     header.virtual_addr(),
+            //     header.mem_size(),
+            //     header.flags()
+            // );
         }
         Ok(())
     }
@@ -51,10 +51,10 @@ impl ElfLoader for Loader<'_> {
     fn load(&mut self, _flags: Flags, base: VAddr, region: &[u8]) -> Result<(), ElfLoaderErr> {
         let start = base;
         let end = base + region.len() as u64;
-        println!(
-            "ELF load: base={:#x} region into = {:#x} -- {:#x}  vbase: {:#x}",
-            base, start, end, self.vbase
-        );
+        // println!(
+        //     "ELF load: base={:#x} region into = {:#x} -- {:#x}  vbase: {:#x}",
+        //     base, start, end, self.vbase
+        // );
         for offs in 0..region.len() {
             self.memory.write8(offs as u64 + start, region[offs]);
         }

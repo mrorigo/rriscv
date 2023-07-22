@@ -97,8 +97,8 @@ impl Instruction<Btype> {
             args: Some(*args),
             mnemonic: "BGE",
             funct: |core, args| {
-                let rs1v = core.bit_extend(core.read_register(args.rs1) as i64) as u64;
-                let rs2v = core.bit_extend(core.read_register(args.rs2) as i64) as u64;
+                let rs1v = core.bit_extend(core.read_register(args.rs1) as i64) as i64;
+                let rs2v = core.bit_extend(core.read_register(args.rs2) as i64) as i64;
                 match rs1v >= rs2v {
                     true => {
                         let se_offs = (args.imm12 as i64).sign_extend(64 - 12);
@@ -117,8 +117,8 @@ impl Instruction<Btype> {
             args: Some(*args),
             mnemonic: "BLT",
             funct: |core, args| {
-                let rs1v = core.bit_extend(core.read_register(args.rs1) as i64) as u64;
-                let rs2v = core.bit_extend(core.read_register(args.rs2) as i64) as u64;
+                let rs1v = core.read_register(args.rs1) as i64;
+                let rs2v = core.read_register(args.rs2) as i64;
                 match rs1v < rs2v {
                     true => {
                         let se_offs = (args.imm12 as i64).sign_extend(64 - 12);
@@ -158,9 +158,9 @@ impl Instruction<Btype> {
             args: Some(*args),
             mnemonic: "BGEU",
             funct: |core, args| {
-                let rs1v = (core.read_register(args.rs1));
+                let rs1v = core.read_register(args.rs1);
                 let rs2v = core.read_register(args.rs2);
-                match rs1v > rs2v {
+                match rs1v >= rs2v {
                     true => {
                         let se_offs = (args.imm12 as i64).sign_extend(64 - 12);
                         //println!("BNE: se_offs: {:#x?}", se_offs);

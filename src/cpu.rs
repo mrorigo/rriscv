@@ -19,6 +19,31 @@ macro_rules! cpu_trace {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[repr(u16)]
+pub enum TrapCause {
+    SupervisorSoftlIrq = 0x101,
+    MachineSoftlIrq = 0x103,
+    SupervisorTimerlIrq = 0x105,
+    MachineTimerlIrq = 0x107,
+    SupervisorExternallIrq = 0x109,
+    MachineExternalIrq = 0x10B,
+
+    InstructionMisaligned = 0x00,
+    InstructionAccessFault = 0x01,
+    IllegalInstruction = 0x02,
+    Breakpoint = 0x03,
+    LoadAddressMisaligned = 0x04,
+    LoadAccessFault = 0x05,
+
+    EnvCallFromUmode = 0x08,
+    EnvCallFromSmode = 0x09,
+    EnvCallFromMmode = 0x0B,
+
+    InstructionPageFault = 0x0C,
+    LoadPageFault = 0x0D,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
 pub enum Xlen {
     Bits32 = 32, // there is really no support for 32-bit only yet
@@ -80,6 +105,16 @@ pub enum CSRRegister {
 
     pmpcfg0 = 0x3a0,
     pmpaddr0 = 0x3b0,
+
+    debug0 = 0x7a0,
+    debug1 = 0x7a1,
+    debug2 = 0x7a2,
+    debug3 = 0x7a3,
+    debug4 = 0x7a4,
+    debug5 = 0x7a5,
+    debug6 = 0x7a6,
+    debug7 = 0x7a7,
+    debug8 = 0x7a8,
 
     mcycle = 0xb00,
     minstret = 0xb02,
@@ -154,8 +189,8 @@ impl Core {
         self.pc += offs
     }
 
-    #[allow(dead_code)]
-    fn find_closest_symbol(&self, addr: VAddr) -> Option<(u64, String)> {
+    //#[allow(dead_code)]
+    pub fn find_closest_symbol(&self, addr: VAddr) -> Option<(u64, String)> {
         match self.symbols.get(&addr) {
             Some(symbol) => Some((addr, symbol.clone())),
             None => {
@@ -237,10 +272,12 @@ impl Core {
         let value = match reg {
             CSRRegister::fflags => self.csrs[CSRRegister::fcsr as usize] & 0x1f,
             CSRRegister::frm => (self.csrs[CSRRegister::fcsr as usize] >> 5) & 0x7,
+            //                               UXL
+            // 10000000000000000000000000000011 00000000 00001101 11100000 00000000
             CSRRegister::sstatus => self.csrs[CSRRegister::mstatus as usize] & 0x80000003000de162,
             CSRRegister::sie => self.csrs[CSRRegister::mie as usize] & 0x222,
             CSRRegister::sip => self.csrs[CSRRegister::mip as usize] & 0x222,
-            // CSRRegister::time => self.mmu.get_clint().read_mtime(),
+            CSRRegister::time => todo!(),
             _ => self.csrs[reg as usize],
         };
         //cpu_trace!(println!("read_csr {:#x?} = {:#x?}", reg, value));
@@ -249,8 +286,37 @@ impl Core {
     }
 
     pub fn write_csr(&mut self, reg: CSRRegister, value: RegisterValue) {
-        //cpu_trace!(println!("write_csr {:#x?} = {:#x?}", reg, value));
-        self.csrs[reg as usize] = value;
+        match reg {
+            CSRRegister::fflags => {
+                self.csrs[CSRRegister::fcsr as usize] &= !0x1f;
+                self.csrs[CSRRegister::fcsr as usize] |= value & 0x1f;
+            }
+            CSRRegister::frm => {
+                self.csrs[CSRRegister::fcsr as usize] &= !0xe0;
+                self.csrs[CSRRegister::fcsr as usize] |= (value << 5) & 0xe0;
+            }
+            CSRRegister::sstatus => {
+                self.csrs[CSRRegister::mstatus as usize] &= !0x80000003000de162;
+                self.csrs[CSRRegister::mstatus as usize] |= value & 0x80000003000de162;
+            }
+            CSRRegister::sie => {
+                self.csrs[CSRRegister::mie as usize] &= !0x222;
+                self.csrs[CSRRegister::mie as usize] |= value & 0x222;
+            }
+            CSRRegister::sip => {
+                self.csrs[CSRRegister::mip as usize] &= !0x222;
+                self.csrs[CSRRegister::mip as usize] |= value & 0x222;
+            }
+            CSRRegister::mideleg => {
+                self.csrs[reg as usize] = value & 0x666; // from qemu
+            }
+            CSRRegister::time => todo!(),
+
+            _ => {
+                //cpu_trace!(println!("write_csr {:#x?} = {:#x?}", reg, value));
+                self.csrs[reg as usize] = value;
+            }
+        }
     }
 
     pub fn read_register(&self, reg: Register) -> RegisterValue {
@@ -273,7 +339,7 @@ impl Core {
 
     pub fn cycle(&mut self, mmu: &mut MMU) {
         self.stage = match self.stage {
-            Stage::ENTER_TRAP => self.enter_trap(),
+            Stage::ENTER_TRAP(cause) => self.enter_trap(cause),
             Stage::EXIT_TRAP => self.exit_trap(),
             Stage::FETCH => self.fetch(mmu),
             Stage::DECODE(instruction) => self.decode(&instruction),

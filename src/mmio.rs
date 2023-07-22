@@ -127,11 +127,11 @@ impl VirtualDevice for UART {
         let mut state = self.state.borrow_mut();
         let lcr = state.lcr >> 7;
         let offs = addr - self.range.start;
-        // println!("UART out @ {:#x?}: {}", offs, value);
         match offs {
             0 => match lcr == 0 {
                 true => {
                     state.thr = value;
+                    eprintln!("UART out @ {:#x?}: {}", offs, value);
                     UART::update_iir(false, &mut state);
                     state.lsr &= !LSR_TX_IDLE;
                 }
@@ -186,7 +186,7 @@ impl VirtualDevice for UART {
             2 => state.iir as u8,
             3 => state.lcr,
             4 => state.mcr,
-            5 => state.lsr | 0x20,
+            5 => state.lsr,
             7 => state.scr,
             _ => 0,
         }

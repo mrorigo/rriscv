@@ -58,7 +58,7 @@ impl Instruction<CLtype> {
                     rs1v, args.rs1, addr
                 ));
                 instruction_trace!(println!("C.LW x{}, {}(x{})", args.rd, args.imm, args.rs1));
-                Stage::MEMORY(crate::pipeline::MemoryAccess::READ32(addr, args.rd))
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ32(addr, args.rd, false))
             },
         }
     }

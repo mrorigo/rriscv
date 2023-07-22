@@ -71,6 +71,19 @@ impl Instruction<Itype> {
         }
     }
 
+    pub fn CSRWI(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"CSRWI",
+            args: Some(*args),
+            funct: |core, args| {
+                let csr_register = num::FromPrimitive::from_u16(args.imm12).unwrap();
+                core.write_csr(csr_register, args.imm12 as u64);
+
+                Stage::WRITEBACK(None)
+            },
+        }
+    }
+
     pub fn CSRRS(args: &Itype) -> Instruction<Itype> {
         Instruction {
             mnemonic: &"CSRRS",
@@ -82,7 +95,29 @@ impl Instruction<Itype> {
                     let rs1v = core.read_register(args.rs1);
                     core.write_csr(csr_register, value | rs1v);
                 }
-                Stage::writeback(args.rd, value)
+                match args.rd {
+                    0 => Stage::WRITEBACK(None),
+                    _ => Stage::writeback(args.rd, value),
+                }
+            },
+        }
+    }
+
+    pub fn CSRRC(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"CSRRC",
+            args: Some(*args),
+            funct: |core, args| {
+                let csr_register = num::FromPrimitive::from_u16(args.imm12).unwrap();
+                let value = core.read_csr(csr_register);
+                if args.rs1 != 0 {
+                    let rs1v = core.read_register(args.rs1);
+                    core.write_csr(csr_register, value & !rs1v);
+                }
+                match args.rd {
+                    0 => Stage::WRITEBACK(None),
+                    _ => Stage::writeback(args.rd, value),
+                }
             },
         }
     }
@@ -172,21 +207,17 @@ impl Instruction<Itype> {
             args: Some(*args),
             funct: |core, args| {
                 let value = core.pc();
-                let se_imm12 = (args.imm12 as u64).sign_extend(64 - 12) as i64;
+                let se_imm12 = (args.imm12 as u64).sign_extend(64 - 12) as i32;
 
                 let rs1v = core.read_register(args.rs1);
-                let target = (rs1v as i64 + se_imm12) as u64;
-                // instruction_trace!(println!(
-                //     "JALR x{}={:#x?} target={:#x?}",
-                //     args.rs1, rs1v, target
-                // ));
+                let target = ((rs1v as i32 + se_imm12) as u32 & 0xffffffff) as u64;
+                instruction_trace!(println!(
+                    "JALR x{}={:#x?} target={:#x?}",
+                    args.rs1, rs1v, target
+                ));
                 core.set_pc(target);
 
-                if args.rd != 0 {
-                    Stage::writeback(args.rd, value)
-                } else {
-                    Stage::WRITEBACK(None)
-                }
+                Stage::writeback(args.rd, value)
             },
         }
     }
@@ -203,7 +234,7 @@ impl Instruction<Itype> {
                     Xlen::Bits64 => 0x3f,
                 };
                 let shamt = (args.imm12) & mask;
-                let value = core.bit_extend((rs1v as i64) << shamt) as u64;
+                let value = ((rs1v as i64) << shamt) as u64;
                 Stage::writeback(args.rd, value)
             },
         }
@@ -222,6 +253,25 @@ impl Instruction<Itype> {
 
                 let shamt = (args.imm12) & mask;
                 let value = ((rs1v as i64) >> shamt) as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
+    pub fn SRAI(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"SRAI",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1);
+                // the shift amount is encoded in the lower 6 bits of the I-immediate field for RV64I.
+                let mask = match core.xlen {
+                    Xlen::Bits32 => 0x1f,
+                    Xlen::Bits64 => 0x3f,
+                };
+
+                let shamt = (args.imm12) & mask;
+                let value = ((rs1v as i64).wrapping_shr(shamt as u32)) as u64;
                 Stage::writeback(args.rd, value)
             },
         }
@@ -254,6 +304,58 @@ impl Instruction<Itype> {
             },
         }
     }
+
+    pub fn LB(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"LB",
+            args: Some(*args),
+            funct: |core, args| {
+                let se_imm12 = (args.imm12 as u64).sign_extend(64 - 12) as i64;
+                let rs1v = core.read_register(args.rs1);
+                let addr = (rs1v as i64 + se_imm12) as u64;
+                // instruction_trace!(println!(
+                //     "LD: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
+                //     rs1v, se_imm12, addr
+                // ));
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ8(addr, args.rd, true))
+            },
+        }
+    }
+
+    pub fn LH(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"LH",
+            args: Some(*args),
+            funct: |core, args| {
+                let se_imm12 = (args.imm12 as u64).sign_extend(64 - 12) as i64;
+                let rs1v = core.read_register(args.rs1);
+                let addr = (rs1v as i64 + se_imm12) as u64;
+                // instruction_trace!(println!(
+                //     "LD: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
+                //     rs1v, se_imm12, addr
+                // ));
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ16(addr, args.rd, true))
+            },
+        }
+    }
+
+    pub fn LHU(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"LHU",
+            args: Some(*args),
+            funct: |core, args| {
+                let se_imm12 = (args.imm12 as u64).sign_extend(64 - 12) as i64;
+                let rs1v = core.read_register(args.rs1);
+                let addr = (rs1v as i64 + se_imm12) as u64;
+                // instruction_trace!(println!(
+                //     "LD: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
+                //     rs1v, se_imm12, addr
+                // ));
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ16(addr, args.rd, false))
+            },
+        }
+    }
+
     pub fn LD(args: &Itype) -> Instruction<Itype> {
         Instruction {
             mnemonic: &"LD",
@@ -271,6 +373,23 @@ impl Instruction<Itype> {
         }
     }
 
+    pub fn LWU(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"LW",
+            args: Some(*args),
+            funct: |core, args| {
+                let se_imm12 = (args.imm12 as u64).sign_extend(64 - 12) as i64;
+                let rs1v = core.read_register(args.rs1);
+                let addr = (rs1v as i64 + se_imm12) as u64;
+                // instruction_trace!(println!(
+                //     "LW: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
+                //     rs1v, se_imm12, addr
+                // ));
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ32(addr, args.rd, false))
+            },
+        }
+    }
+
     pub fn LW(args: &Itype) -> Instruction<Itype> {
         Instruction {
             mnemonic: &"LW",
@@ -283,7 +402,7 @@ impl Instruction<Itype> {
                 //     "LW: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
                 //     rs1v, se_imm12, addr
                 // ));
-                Stage::MEMORY(crate::pipeline::MemoryAccess::READ64(addr, args.rd, true))
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ32(addr, args.rd, true))
             },
         }
     }
@@ -300,7 +419,7 @@ impl Instruction<Itype> {
                 //     "LBU: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
                 //     rs1v, se_imm12, addr
                 // ));
-                Stage::MEMORY(crate::pipeline::MemoryAccess::READ8(addr, args.rd))
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ8(addr, args.rd, false))
             },
         }
     }
@@ -383,7 +502,7 @@ impl Display for Instruction<Itype> {
             let args = self.args.unwrap();
             write!(
                 f,
-                "{} x{},x{},{}",
+                "{} x{},x{},{:#x}",
                 self.mnemonic, args.rd, args.rs1, args.imm12,
             )
         }
@@ -403,7 +522,7 @@ impl InstructionSelector<Itype> for Itype {
                     // "The right shift type is encoded in bit 30"
                     match num::FromPrimitive::from_u8(self.funct7 as u8 & 0b1111110).unwrap() {
                         Funct7::B0000000 => Instruction::SRLI(self),
-                        Funct7::B0100000 => todo!("SRAI"),
+                        Funct7::B0100000 => Instruction::SRAI(self),
                         _ => panic!("{:?} is unknown Funct7 for SRLI_SRAI", self.funct7),
                     }
                 }
@@ -412,6 +531,8 @@ impl InstructionSelector<Itype> for Itype {
             MajorOpcode::SYSTEM => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                 CSR_Funct3::CSRRS => Instruction::CSRRS(self),
                 CSR_Funct3::CSRRW => Instruction::CSRRW(self),
+                CSR_Funct3::CSRWI => Instruction::CSRWI(self),
+                CSR_Funct3::CSRRC => Instruction::CSRRC(self),
                 CSR_Funct3::ECALL_EBREAK_MRET => match self.imm12 {
                     0 => todo!("ECALL"),
                     1 => Instruction::EBREAK(self),
@@ -428,9 +549,13 @@ impl InstructionSelector<Itype> for Itype {
                 _ => panic!("unknown funct3 for OpImm32: {:?}", self.funct3),
             },
             MajorOpcode::LOAD => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
+                Load_Funct3::LB => Instruction::LB(self),
+                Load_Funct3::LH => Instruction::LH(self),
                 Load_Funct3::LD => Instruction::LD(self),
                 Load_Funct3::LW => Instruction::LW(self),
+                Load_Funct3::LWU => Instruction::LWU(self),
                 Load_Funct3::LBU => Instruction::LBU(self),
+                Load_Funct3::LHU => Instruction::LHU(self),
                 _ => panic!(),
             },
             MajorOpcode::MISC_MEM => {

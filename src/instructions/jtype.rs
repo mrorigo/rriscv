@@ -54,11 +54,12 @@ impl Instruction<Jtype> {
                 // const M: u32 = 1 << (20 - 1);
                 // let se_imm20 = ((args.imm20 << 1) ^ M) - M;
                 let target = (core.prev_pc as i64 + se_imm20) as u64;
+                let prev_pc = core.pc();
                 core.set_pc(target);
 
                 instruction_trace!(println!("JAL {:#x?}", target));
                 if args.rd != 0 {
-                    Stage::writeback(args.rd, core.pc())
+                    Stage::writeback(args.rd, prev_pc)
                 } else {
                     Stage::WRITEBACK(None)
                 }

@@ -80,6 +80,7 @@ pub enum Op_Funct3 {
     SLL = 0b001,
     SLT = 0b010,
     SLTU = 0b011,
+    XOR = 0b100,
     SRL_SRA = 0b101,
     OR = 0b110,
     AND = 0b111,
@@ -113,12 +114,13 @@ pub enum MiscMem_Funct3 {
 #[derive(Debug, PartialEq, FromPrimitive)]
 #[repr(u8)]
 pub enum Load_Funct3 {
-    LB = 0x000,
+    LB = 0b000,
     LH = 0b001,
     LW = 0b010,
     LBU = 0b100,
     LHU = 0b101,
     LD = 0b011,
+    LWU = 0b110,
 }
 
 #[allow(non_camel_case_types)]
@@ -128,9 +130,9 @@ pub enum CSR_Funct3 {
     CSRRW = 0b001,
     CSRRS = 0b010,
     CSRRC = 0b011,
-    CSRRWI = 0b101,
-    CSRRSI = 0b110,
-    CSRRCI = 0b111,
+    CSRWI = 0b101,
+    CSRSI = 0b110,
+    CSRCI = 0b111,
 }
 
 #[allow(non_camel_case_types)]

@@ -2,7 +2,7 @@ use elfloader::VAddr;
 use quark::Signs;
 
 use crate::{
-    cpu::{CSRRegister, Core, PrivMode, Register, RegisterValue},
+    cpu::{CSRRegister, Core, PrivMode, Register, RegisterValue, TrapCause},
     instructions::{
         decoder::{DecodedInstruction, InstructionDecoder},
         InstructionExcecutor, InstructionSelector,
@@ -23,9 +23,9 @@ macro_rules! pipeline_trace {
 pub enum MemoryAccess {
     AMOSWAP_W(VAddr, RegisterValue, Register),
     AMOSWAP_D(VAddr, VAddr, Register),
-    READ8(VAddr, Register),
-    READ16(VAddr, Register),
-    READ32(VAddr, Register),
+    READ8(VAddr, Register, bool),
+    READ16(VAddr, Register, bool),
+    READ32(VAddr, Register, bool),
     READ64(VAddr, Register, bool),
     WRITE8(VAddr, u8),
     WRITE16(VAddr, u16),
@@ -57,7 +57,7 @@ pub struct WritebackStage {
 //#[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum Stage {
-    ENTER_TRAP,
+    ENTER_TRAP(TrapCause),
     EXIT_TRAP,
     FETCH,
     DECODE(RawInstruction),
@@ -84,7 +84,7 @@ pub trait PipelineStages {
 
     //    fn memory(&mut self, memory_access: &MemoryAccess) -> Stage;
     fn writeback(&mut self, writeback: Option<WritebackStage>) -> Stage;
-    fn enter_trap(&mut self) -> Stage;
+    fn enter_trap(&mut self, cause: TrapCause) -> Stage;
     fn exit_trap(&mut self) -> Stage;
 }
 
@@ -153,29 +153,46 @@ impl PipelineStages for Core {
 
     fn memory(&mut self, mmu: &mut MMU, memory_access: &MemoryAccess) -> Stage {
         match *memory_access {
-            MemoryAccess::READ8(offset, register) => {
+            MemoryAccess::READ8(offset, register, sign_extend) => {
                 let value = mmu.read8(offset).unwrap();
                 pipeline_trace!(println!("m:    READ8 @ {:#x?}: {:#x?}", offset, value));
 
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: register,
-                    value: value as u64,
+                    value: match sign_extend {
+                        false => value as u64,
+                        true => value as i8 as i16 as i32 as u64,
+                    },
                 }))
             }
-            MemoryAccess::READ16(_offset, _register) => {
-                todo!()
+            MemoryAccess::READ16(offset, register, sign_extend) => {
+                let h = mmu.read8(offset + 1).unwrap() as u16;
+                let l = mmu.read8(offset).unwrap() as u16;
+                let value = (h << 8 | l) as i16 as u64;
+                pipeline_trace!(println!("m:    READ16 @ {:#x?}: {:#x?}", offset, value));
+
+                Stage::WRITEBACK(Some(WritebackStage {
+                    register: register,
+                    value: match sign_extend {
+                        false => (value & 0xffff) as u64,
+                        true => value as i16 as i32 as u64,
+                    },
+                }))
                 // let v = self.mmu.read_16(offset).unwrap();
                 // Stage::WRITEBACK(Some(WritebackStage {
                 //     register: register,
                 //     value: v as u64,
                 // }))
             }
-            MemoryAccess::READ32(offset, register) => {
+            MemoryAccess::READ32(offset, register, sign_extend) => {
                 let value = mmu.read_32(offset).unwrap();
                 pipeline_trace!(println!("m:    READ32 @ {:#x?}: {:#x?}", offset, value));
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: register,
-                    value: value as u64,
+                    value: match sign_extend {
+                        true => value as i32 as i64 as u64,
+                        false => (value & 0xffffffff) as u64,
+                    },
                 }))
             }
             MemoryAccess::READ64(offset, register, sign_extend) => {
@@ -236,12 +253,13 @@ impl PipelineStages for Core {
 
     fn writeback(&mut self, writeback: Option<WritebackStage>) -> Stage {
         match writeback {
-            Some(wb) => {
+            Some(wb) if wb.register > 0 => {
                 pipeline_trace!(println!("w: x{} = {:#x?}", wb.register, wb.value));
 
                 self.write_register(wb.register, wb.value)
             }
-            None => {}
+            Some(wb) if wb.register == 0 => { /*warn*/ }
+            _ => {}
         }
 
         // Update the instret CSR based on what PrivMode we are in
@@ -260,7 +278,34 @@ impl PipelineStages for Core {
         Stage::FETCH
     }
 
-    fn enter_trap(&mut self) -> Stage {
+    fn enter_trap(&mut self, cause: TrapCause) -> Stage {
+        let causereg = match self.pmode() {
+            PrivMode::Machine => CSRRegister::mcause,
+            PrivMode::Supervisor => CSRRegister::sstatus,
+            _ => panic!(),
+        };
+        match cause as u16 & 0x100 {
+            0x100 => {
+                // interrupt
+                self.write_csr(causereg, cause as u8 as u64);
+                self.write_csr(CSRRegister::mtval, 0);
+                self.set_pc(self.pc() + 4);
+            }
+            _ => {
+                self.write_csr(causereg, (cause as u8 - 1) as u64);
+                // @TODO: mtval should be set to writeback-value if LoadAccessFault
+                self.write_csr(CSRRegister::mtval, self.pc());
+            }
+        }
+        self.write_csr(CSRRegister::mepc, self.pc());
+
+        // TODO: Handle WFI
+        self.write_csr(
+            CSRRegister::mstatus,
+            (self.read_csr(CSRRegister::mstatus) & 0x08) << 4,
+        );
+
+        self.set_pc(self.read_csr(CSRRegister::mtvec) - 4);
         Stage::EXIT_TRAP
     }
 

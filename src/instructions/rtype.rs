@@ -9,7 +9,7 @@ use super::{
     functions::{Funct3, Funct5, Funct7, Op32_Funct3, Op_Funct3, RV32M_Funct3, RV64M_Funct3},
     opcodes::MajorOpcode,
     FormatDecoder, Instruction, InstructionExcecutor, InstructionFormatType, InstructionSelector,
-    InstructionType, UncompressedFormatType,
+    UncompressedFormatType,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -79,7 +79,7 @@ impl Instruction<Rtype> {
             funct: |core, args| {
                 let r1v = core.read_register(args.rs1);
                 let r2v = core.read_register(args.rs2);
-                let value = core.bit_extend((r1v & r2v) as i64) as u64;
+                let value = r1v & r2v;
                 Stage::writeback(args.rd, value)
             },
         }
@@ -93,6 +93,19 @@ impl Instruction<Rtype> {
                 let r1v = core.read_register(args.rs1);
                 let r2v = core.read_register(args.rs2);
                 let value = core.bit_extend((r1v | r2v) as i64) as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
+    pub fn XOR(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"XOR",
+            args: Some(*args),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1);
+                let r2v = core.read_register(args.rs2);
+                let value = core.bit_extend((r1v ^ r2v) as i64) as u64;
                 Stage::writeback(args.rd, value)
             },
         }
@@ -152,9 +165,9 @@ impl Instruction<Rtype> {
             mnemonic: &"SUB",
             args: Some(*args),
             funct: |core, args| {
-                let r1v = core.read_register(args.rs1);
-                let r2v = core.read_register(args.rs2);
-                let value = core.bit_extend((r2v - r1v) as i64) as u64;
+                let r1v = core.read_register(args.rs1) as i64;
+                let r2v = core.read_register(args.rs2) as i64;
+                let value = core.bit_extend((r1v.wrapping_sub(r2v)) as i64) as u64;
                 Stage::writeback(args.rd, value)
             },
         }
@@ -185,6 +198,22 @@ impl Instruction<Rtype> {
                     false => 0,
                 };
                 Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
+    pub fn SLL(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"SLL",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1) as u64;
+                let rs2v = core.read_register(args.rs2) as u32;
+                let value = core.bit_extend(rs1v.wrapping_shl(rs2v) as i64) as u64;
+                match args.rd {
+                    0 => Stage::WRITEBACK(None),
+                    _ => Stage::writeback(args.rd, value),
+                }
             },
         }
     }
@@ -241,7 +270,9 @@ impl InstructionSelector<Rtype> for Rtype {
                     Op_Funct3::SRL_SRA => todo!("SRL, since Funct7=0"),
                     Op_Funct3::AND => Instruction::AND(self),
                     Op_Funct3::OR => Instruction::OR(self),
+                    Op_Funct3::XOR => Instruction::XOR(self),
                     Op_Funct3::SLTU => Instruction::SLTU(self),
+                    Op_Funct3::SLL => Instruction::SLL(self),
                     _ => todo!(),
                 },
                 // _ => todo!("R-type Funct7 not supported"),

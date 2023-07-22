@@ -1,7 +1,5 @@
 use std::fmt::Display;
 
-use quark::Signs;
-
 use crate::{
     cpu::{Core, Register, Xlen},
     pipeline::Stage,
@@ -41,7 +39,7 @@ impl Display for Instruction<Utype> {
             write!(f, "{}", self.mnemonic)
         } else {
             let args = self.args.unwrap();
-            write!(f, "{} x{},{}", self.mnemonic, args.rd, args.imm)
+            write!(f, "{} x{},{:#x}", self.mnemonic, args.rd, args.imm)
         }
     }
 }

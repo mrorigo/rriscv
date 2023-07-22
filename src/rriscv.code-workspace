@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../../../git/xv6-riscv"
+		},
+		{
+			"path": "../../../git/riscv-tests"
 		}
 	],
 	"settings": {
