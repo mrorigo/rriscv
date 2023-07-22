@@ -12,6 +12,15 @@ pub enum Funct3 {
 }
 
 #[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, Copy, Clone, FromPrimitive)]
+#[repr(u8)]
+pub enum Funct7 {
+    B0000000 = 0b0000000,
+    RV32M = 0b0000001,
+    B0100000 = 0b0100000,
+}
+
+#[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, FromPrimitive)]
 #[repr(u8)]
 pub enum C0_Funct3 {
@@ -45,6 +54,19 @@ pub enum OpImm_Funct3 {
     XORI = 0b100,
     ORI = 0b110,
     ANDI = 0b111,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, FromPrimitive)]
+#[repr(u8)]
+pub enum Op_Funct3 {
+    ADD_SUB = 0b000,
+    SLL = 0b001,
+    SLT = 0b010,
+    SLTU = 0b011,
+    SRL_SRA = 0b101,
+    OR = 0b110,
+    AND = 0b111,
 }
 
 #[allow(non_camel_case_types)]

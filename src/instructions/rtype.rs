@@ -6,7 +6,7 @@ use crate::{
 };
 
 use super::{
-    functions::{Funct3, RV32M_Funct3},
+    functions::{Funct3, Funct7, Op_Funct3, RV32M_Funct3},
     opcodes::MajorOpcode,
     FormatDecoder, Instruction, InstructionExcecutor, InstructionFormat, InstructionFormatType,
     InstructionSelector,
@@ -19,7 +19,7 @@ pub struct Rtype {
     pub rs1: Register,
     pub rs2: Register,
     pub funct3: Funct3,
-    pub funct7: u8,
+    pub funct7: Funct7,
 }
 
 impl InstructionFormatType for Rtype {}
@@ -32,7 +32,7 @@ impl FormatDecoder<Rtype> for Rtype {
             rs1: ((word >> 15) & 31) as Register,
             rs2: ((word >> 20) & 31) as Register,
             funct3: num::FromPrimitive::from_u8(((word >> 12) & 7) as u8).unwrap(),
-            funct7: ((word >> 25) & 0x7f) as u8,
+            funct7: num::FromPrimitive::from_u8(((word >> 25) & 0x7f) as u8).unwrap(),
         }
     }
 }
@@ -54,6 +54,32 @@ impl Display for Instruction<Rtype> {
 
 #[allow(non_snake_case)]
 impl Instruction<Rtype> {
+    pub fn AND(itype: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"AND",
+            args: Some(*itype),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1);
+                let r2v = core.read_register(args.rs2);
+                let value = core.bit_extend((r1v & r2v) as i64) as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
+    pub fn OR(itype: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"OR",
+            args: Some(*itype),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1);
+                let r2v = core.read_register(args.rs2);
+                let value = core.bit_extend((r1v | r2v) as i64) as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
     pub fn MUL(itype: &Rtype) -> Instruction<Rtype> {
         Instruction {
             mnemonic: &"MUL",
@@ -89,11 +115,19 @@ impl InstructionSelector<Rtype> for Rtype {
         match self.opcode {
             MajorOpcode::OP => match self.funct7 {
                 // RV32M
-                1 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
+                Funct7::RV32M => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                     RV32M_Funct3::MUL => Instruction::MUL(self),
                     _ => panic!(),
                 },
-                _ => todo!("Support non-RV32M OP opcode"),
+                Funct7::B0100000 => todo!("SUB&SRA"),
+                Funct7::B0000000 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
+                    Op_Funct3::ADD_SUB => todo!("ADD, since Funct7=0"),
+                    Op_Funct3::SRL_SRA => todo!("SRL, since Funct7=0"),
+                    Op_Funct3::AND => Instruction::AND(self),
+                    Op_Funct3::OR => Instruction::OR(self),
+                    _ => todo!(),
+                },
+                _ => todo!("R-type Funct7 not supported"),
             },
             _ => panic!(),
         }
