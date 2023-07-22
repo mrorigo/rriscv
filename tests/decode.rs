@@ -3,9 +3,7 @@
 use rriscv::{
     self,
     cpu::{self, Core},
-    decoder::{
-        CSStype, CStype, DecodedInstruction, InstructionDecoder, Itype, Jtype, Stype, Utype,
-    },
+    decoder::{CSStype, DecodedInstruction, InstructionDecoder, Itype, Jtype, Stype, Utype},
     memory::Memory,
     opcodes::{CompressedOpcode, MajorOpcode},
     pipeline::RawInstruction,
@@ -36,6 +34,7 @@ impl TestCase {
             self.decoded
         )
     }
+
     pub fn create(
         description: &'static str,
         instruction: u32,

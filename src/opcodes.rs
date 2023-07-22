@@ -1,7 +1,5 @@
 extern crate num;
 
-type OpCode = u16;
-
 pub const FUNCT7_SHIFT: u8 = 11;
 pub const FUNCT7_MASK: u16 = (1 << FUNCT7_SHIFT) - 1;
 //const FUNCT7: u16 = 1 << FUNCT7_SHIFT;
@@ -34,15 +32,6 @@ pub enum MajorOpcode {
     SYSTEM = 0b1110011,
 }
 
-impl MajorOpcode {
-    fn encode(&self, op: u8, funct3: u8, funct7: u8) -> OpCodes {
-        let word =
-            op as u32 | ((funct3 as u32) << FUNCT3_SHIFT) | ((funct7 as u32) << FUNCT7_SHIFT);
-        let ret: Option<OpCodes> = num::FromPrimitive::from_u32(word);
-        ret.unwrap_or(OpCodes::ILLEGAL)
-    }
-}
-
 #[derive(Debug, Copy, Clone, FromPrimitive, PartialEq)]
 #[repr(u8)]
 pub enum CompressedOpcode {
@@ -52,8 +41,42 @@ pub enum CompressedOpcode {
     C3 = 0b11,
 }
 
-/// Each opcode encoded together with the funct3 and func7 bits
-/// as a 32 bit number:
+#[derive(Debug, PartialEq, FromPrimitive)]
+#[repr(u8)]
+pub enum OpImmFunct3 {
+    ADDI = 0b000,
+    SLTI = 0b010,
+    SLTIU = 0b011,
+    XORI = 0b100,
+    ORI = 0b110,
+    ANDI = 0b111,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, FromPrimitive)]
+pub enum CSR_Funct3 {
+    CSRRW = 0b001,
+    CSRRS = 0b010,
+    CSRRC = 0b011,
+    CSRRWI = 0b101,
+    CSRRSI = 0b110,
+    CSRRCI = 0b111,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, FromPrimitive)]
+pub enum RV32M_Funct3 {
+    MUL = 0b000,
+    MULH = 0b001,
+    MULHSU = 0b010,
+    MULSHU = 0b011,
+    DIV = 0b100,
+    DIVU = 0b101,
+    REM = 0b110,
+    REMU = 0b111,
+}
+
+/// Each opcode encoded together with the funct3 and func7 bits as a 32 bit number:
 /// Bits 0-7:  opcode
 /// Bits 8-10: funct3
 /// Bit 11-18: funct7
@@ -145,4 +168,14 @@ pub enum OpCodes {
     DIVUW = MajorOpcode::OP_IMM_32 as u32 | (0b101 << FUNCT3_SHIFT) | (1 << FUNCT7_SHIFT),
     REMW = MajorOpcode::OP_IMM_32 as u32 | (0b110 << FUNCT3_SHIFT) | (1 << FUNCT7_SHIFT),
     REMUW = MajorOpcode::OP_IMM_32 as u32 | (0b111 << FUNCT3_SHIFT) | (1 << FUNCT7_SHIFT),
+}
+
+impl MajorOpcode {
+    #[allow(dead_code)]
+    fn encode(&self, op: u8, funct3: u8, funct7: u8) -> OpCodes {
+        let word =
+            op as u32 | ((funct3 as u32) << FUNCT3_SHIFT) | ((funct7 as u32) << FUNCT7_SHIFT);
+        let ret: Option<OpCodes> = num::FromPrimitive::from_u32(word);
+        ret.unwrap_or(OpCodes::ILLEGAL)
+    }
 }

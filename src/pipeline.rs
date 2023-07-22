@@ -1,15 +1,15 @@
 use crate::{
-    cpu::{CSRRegister, Core, Execution, PrivMode, Register},
+    cpu::{CSRRegister, Core, ExecutionStage, PrivMode, Register},
     decoder::{DecodedInstruction, InstructionDecoder},
     memory::MemoryAccessWidth,
 };
 
 #[derive(Debug, Copy, Clone)]
 pub enum MemoryAccess {
-    READ8(usize),
-    READ16(usize),
-    READ32(usize),
-    READ64(usize),
+    READ8(usize, Register),
+    READ16(usize, Register),
+    READ32(usize, Register),
+    READ64(usize, Register),
     WRITE8(usize, u8),
     WRITE16(usize, u16),
     WRITE32(usize, u32),
@@ -30,6 +30,7 @@ pub struct WritebackStage {
 }
 
 #[derive(Debug)]
+#[allow(non_camel_case_types)]
 pub enum Stage {
     ENTER_TRAP,
     EXIT_TRAP,
@@ -62,52 +63,80 @@ impl PipelineStages for Core<'_> {
     }
 
     fn memory(&mut self, memory_access: &MemoryAccess) -> Stage {
-        match memory_access {
-            MemoryAccess::READ8(offset) => todo!(),
-            MemoryAccess::READ16(offset) => todo!(),
-            MemoryAccess::READ32(offset) => todo!(),
-            MemoryAccess::READ64(offset) => todo!(),
-            _ => {}
+        match *memory_access {
+            MemoryAccess::READ8(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
+                register: register,
+                value: self
+                    .memory
+                    .read_single(
+                        offset as u64 + self.memory.get_base_address(),
+                        MemoryAccessWidth::BYTE,
+                    )
+                    .unwrap(),
+            })),
+            MemoryAccess::READ16(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
+                register: register,
+                value: self
+                    .memory
+                    .read_single(
+                        offset as u64 + self.memory.get_base_address(),
+                        MemoryAccessWidth::HALFWORD,
+                    )
+                    .unwrap(),
+            })),
+            MemoryAccess::READ32(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
+                register: register,
+                value: self
+                    .memory
+                    .read_single(
+                        offset as u64 + self.memory.get_base_address(),
+                        MemoryAccessWidth::WORD,
+                    )
+                    .unwrap(),
+            })),
+            MemoryAccess::READ64(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
+                register: register,
+                value: self
+                    .memory
+                    .read_single(
+                        offset as u64 + self.memory.get_base_address(),
+                        MemoryAccessWidth::LONG,
+                    )
+                    .unwrap(),
+            })),
+            MemoryAccess::WRITE8(offset, value) => {
+                self.memory.write_single(
+                    offset as u64 + self.memory.get_base_address(),
+                    value as u64,
+                    MemoryAccessWidth::BYTE,
+                );
+                Stage::WRITEBACK(None)
+            }
+            MemoryAccess::WRITE16(offset, value) => {
+                self.memory.write_single(
+                    offset as u64 + self.memory.get_base_address(),
+                    value as u64,
+                    MemoryAccessWidth::HALFWORD,
+                );
+                Stage::WRITEBACK(None)
+            }
+            MemoryAccess::WRITE32(offset, value) => {
+                self.memory.write_single(
+                    offset as u64 + self.memory.get_base_address(),
+                    value as u64,
+                    MemoryAccessWidth::WORD,
+                );
+                Stage::WRITEBACK(None)
+            }
+            MemoryAccess::WRITE64(offset, value) => {
+                self.memory.write_single(
+                    offset as u64 + self.memory.get_base_address(),
+                    value as u64,
+                    MemoryAccessWidth::LONG,
+                );
+                Stage::WRITEBACK(None)
+            }
         }
-        match memory_access {
-            MemoryAccess::WRITE8(offset, value) => todo!(),
-            MemoryAccess::WRITE16(offset, value) => todo!(),
-            MemoryAccess::WRITE32(offset, value) => todo!(),
-            MemoryAccess::WRITE64(offset, value) => todo!(),
-            _ => {}
-        }
-        Stage::WRITEBACK(None)
-        //let decoded = self.pipe.decoded.as_ref().unwrap();
-        //let memory = self.pipe.decoded.as_ref().unwrap();
-        // match decoded.mem_offset {
-        //     Some(offset) => {
-        //         match decoded.instruction_format {
-        //             // STORE
-        //             InstructionFormat::S => {
-        //                 self.memory.write_single(
-        //                     (offset + self.memory.get_base_address()),
-        //                     self.pipe.rs2v,
-        //                     self.pipe.memory_access_width,
-        //                 );
-        //             }
-        //             InstructionFormat::CSS => {
-        //                 self.memory.write_single(
-        //                     (/*self.read_register(decoded.rs1 as u64)
-        //                     + */offset + self.memory.get_base_address()),
-        //                     self.pipe.rs2v,
-        //                     self.pipe.memory_access_width,
-        //                 );
-        //             }
-        //             // LOAD
-        //             InstructionFormat::I => {
-        //                 todo!()
-        //             }
-        //             _ => panic!(),
-        //         }
-        //     }
-        //     None => {}
-        // }
-        //Stage::WRITEBACK
     }
 
     fn writeback(&mut self, writeback: Option<WritebackStage>) -> Stage {
@@ -116,20 +145,24 @@ impl PipelineStages for Core<'_> {
             None => {}
         }
 
-        match self.pmode {
-            PrivMode::Machine => {
-                self.csrs[CSRRegister::minstret as usize] += 1;
-            }
-            _ => {
-                todo!("Only machine mode so far")
-            }
+        // Update the instret CSR based on what PrivMode we are in
+
+        let (instretcsr, instrethcsr) = match self.pmode {
+            PrivMode::Machine => (CSRRegister::minstret, CSRRegister::minstreth),
+            PrivMode::Supervisor => (CSRRegister::instret, CSRRegister::instreth),
+            PrivMode::User => (CSRRegister::instret, CSRRegister::instreth),
+        };
+        let instret = self.read_csr(instretcsr);
+        if instret.wrapping_add(1) < instret {
+            self.write_csr(instrethcsr, self.read_csr(instrethcsr).wrapping_add(1));
         }
+        self.write_csr(instretcsr, instret.wrapping_add(1));
 
         Stage::FETCH
     }
 
     fn execute(&mut self, decoded: &DecodedInstruction) -> Stage {
-        let param: &dyn Execution = match decoded {
+        let param: &dyn ExecutionStage = match decoded {
             DecodedInstruction::I(param) => param,
             DecodedInstruction::J(param) => param,
             DecodedInstruction::U(param) => param,
@@ -145,7 +178,7 @@ impl PipelineStages for Core<'_> {
             DecodedInstruction::CB(param) => param,
             DecodedInstruction::CJ(param) => param,
         };
-        param.execute(&self)
+        param.execute(self)
     }
 
     fn decode(&mut self, instruction: &RawInstruction) -> Stage {

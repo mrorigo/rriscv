@@ -101,11 +101,11 @@ impl MemoryOperations for Memory {
                     & 0xffff,
             ),
             MemoryAccessWidth::WORD => Some(
-                ((self
+                (self
                     .read_single(addr + 2, MemoryAccessWidth::HALFWORD)
                     .unwrap()
                     << 16)
-                    | self.read_single(addr, MemoryAccessWidth::HALFWORD).unwrap() & 0xffff),
+                    | self.read_single(addr, MemoryAccessWidth::HALFWORD).unwrap() & 0xffff,
             ),
             MemoryAccessWidth::LONG => Some(
                 ((self.read_single(addr + 4, MemoryAccessWidth::WORD).unwrap() << 32)
@@ -122,7 +122,7 @@ impl MemoryOperations for Memory {
 
 impl Memory {
     pub fn create(base_address: u64, size: usize) -> impl MemoryOperations {
-        let mut data = Vec::<u8>::with_capacity(size).as_mut_ptr();
+        let data = Vec::<u8>::with_capacity(size).as_mut_ptr();
         mem::forget(data);
         for i in 0..size {
             unsafe {

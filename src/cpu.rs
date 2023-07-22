@@ -1,11 +1,27 @@
+use num_traits::WrappingMul;
+use quark::Signs;
+
 use crate::decoder::{
     Btype, CBtype, CIWtype, CItype, CJtype, CLtype, CRtype, CSStype, CStype, Itype, Jtype, Rtype,
     Stype, Utype,
 };
 
 use crate::memory::MemoryOperations;
-use crate::opcodes;
+use crate::opcodes::{self, CSR_Funct3, MajorOpcode, OpImmFunct3, RV32M_Funct3};
 use crate::pipeline::{PipelineStages, Stage, WritebackStage};
+
+pub type Register = u8;
+pub type RegisterValue = u64;
+
+type Registers = [RegisterValue; 32];
+type CSRRegisters = [RegisterValue; 4096];
+
+#[derive(Debug)]
+pub enum Xlen {
+    Bits32, // there is really no support for 32-bit only yet
+    Bits64,
+    //Bits128,  // nor any for 128-bit
+}
 
 #[derive(Copy, Clone, Debug)]
 pub enum PrivMode {
@@ -14,41 +30,66 @@ pub enum PrivMode {
     Machine,
 }
 
-pub type Register = u8;
-pub type RegisterValue = u64;
-
-type Registers = [RegisterValue; 32];
-type CSRRegisters = [RegisterValue; 4096];
-
 #[allow(non_camel_case_types)]
 #[derive(Debug, Copy, Clone, FromPrimitive)]
 #[repr(u16)]
 pub enum CSRRegister {
-    mvendorid = 0xf11,
-    marchid = 0xf11 + 1,
-    mimpid = 0xf11 + 2,
-    mhartid = 0xf11 + 3,
-    mconfigptr = 0xf11 + 4,
+    ustatus = 0,
+    fflags = 1,
+    frm = 2,
+    fcsr = 3,
+    uie = 4,
+    utvec = 5,
+
+    uepc = 0x41,
+    ucause = 0x42,
+    utval = 0x43,
+
+    sstatus = 0x100,
+    sedeleg = 0x102,
+    sideleg = 0x103,
+    sie = 0x104,
+    stvec = 0x105,
+
+    sip = 0x144,
+
     mstatus = 0x300,
-    misa = 0x300 + 1,
-    medeleg = 0x300 + 2,
-    mideleg = 0x300 + 3,
-    mie = 0x300 + 4,
-    mtvec = 0x300 + 5,
-    mcounteren = 0x300 + 6,
-    mstatush = 0x300 + 7,
+    misa = 0x301,
+    medeleg = 0x302,
+    mideleg = 0x303,
+    mie = 0x304,
+    mtvec = 0x305,
+    mcounteren = 0x306,
+    mstatush = 0x307,
+
+    mip = 0x344,
 
     mcycle = 0xb00,
     minstret = 0xb02,
 
     minstreth = 0xb82, // RV32 only
+
+    cycle = 0xc00,
+    time = 0xc01,
+    instret = 0xc02,
+
+    cycleh = 0xc80,
+    timeh = 0xc81,
+    instreth = 0xc82,
+
+    mvendorid = 0xf11,
+    marchid = 0xf12,
+    mimpid = 0xf13,
+    mhartid = 0xf14,
+    mconfigptr = 0xf15,
 }
 
 #[derive(Debug)]
 pub struct Core<'a> {
     pub id: u64,
-    pub registers: Registers,
-    pub csrs: CSRRegisters,
+    pub xlen: Xlen,
+    registers: Registers,
+    csrs: CSRRegisters,
     pub pmode: PrivMode,
     pub memory: &'a mut dyn MemoryOperations,
     pub pc: u64,
@@ -65,6 +106,7 @@ impl<'a> Core<'a> {
 
         Core {
             id,
+            xlen: Xlen::Bits64,
             registers,
             csrs,
             pmode: PrivMode::Machine,
@@ -91,6 +133,32 @@ impl<'a> Core<'a> {
 
     pub fn pmode(&self) -> PrivMode {
         self.pmode
+    }
+
+    pub fn read_csr(&self, reg: CSRRegister) -> RegisterValue {
+        // SSTATUS, SIE, and SIP are subsets of MSTATUS, MIE, and MIP
+        match reg {
+            CSRRegister::fflags => self.csrs[CSRRegister::fcsr as usize] & 0x1f,
+            CSRRegister::frm => (self.csrs[CSRRegister::fcsr as usize] >> 5) & 0x7,
+            CSRRegister::sstatus => self.csrs[CSRRegister::mstatus as usize] & 0x80000003000de162,
+            CSRRegister::sie => self.csrs[CSRRegister::mie as usize] & 0x222,
+            CSRRegister::sip => self.csrs[CSRRegister::mip as usize] & 0x222,
+            // CSRRegister::time => self.mmu.get_clint().read_mtime(),
+            _ => self.csrs[reg as usize],
+        }
+    }
+
+    /// Extends a value depending on XLEN. If in 32-bit mode, will extend the 31st bit
+    /// across all bits above it. In 64-bit mode, this is a no-op.
+    pub fn bit_extend(&self, value: i64) -> i64 {
+        match self.xlen {
+            Xlen::Bits32 => value as i32 as i64,
+            Xlen::Bits64 => value,
+        }
+    }
+
+    pub fn write_csr(&mut self, reg: CSRRegister, value: RegisterValue) {
+        self.csrs[reg as usize] = value;
     }
 
     pub fn read_register(&self, reg: Register) -> RegisterValue {
@@ -121,30 +189,63 @@ impl<'a> Core<'a> {
     }
 }
 
-pub trait Execution {
-    fn execute(&self, i: &Core) -> Stage;
+pub trait ExecutionStage {
+    fn execute(&self, _core: &mut Core) -> Stage;
 }
 
-impl Execution for Itype {
-    fn execute(&self, i: &Core) -> Stage {
+impl ExecutionStage for Itype {
+    fn execute(&self, core: &mut Core) -> Stage {
+        let value = match self.opcode {
+            MajorOpcode::OP_IMM => {
+                let rs1v = core.read_register(self.rs1);
+                match num::FromPrimitive::from_u8(self.funct3) {
+                    Some(OpImmFunct3::ADDI) => {
+                        Some(rs1v.wrapping_add((self.imm12 as u64).sign_extend(64 - 12)))
+                    }
+                    _ => panic!(),
+                }
+            }
+            MajorOpcode::SYSTEM => {
+                let csr_register = num::FromPrimitive::from_u16(self.imm12).unwrap();
+                let csrv = core.read_csr(csr_register);
+                match num::FromPrimitive::from_u8(self.funct3) {
+                    Some(CSR_Funct3::CSRRS) => {
+                        // For both CSRRS and CSRRC, if rs1=x0, then the instruction will not write to the CSR at all
+                        if self.rs1 != 0 {
+                            core.write_csr(csr_register, csrv | core.read_register(self.rs1));
+                        }
+                        Some(csrv)
+                    }
+                    _ => panic!(),
+                }
+            }
+
+            _ => panic!(),
+        };
+
+        if value.is_some() {
+            Stage::WRITEBACK(Some(WritebackStage {
+                register: self.rd,
+                value: value.unwrap(),
+            }))
+        } else {
+            Stage::WRITEBACK(None)
+        }
+    }
+}
+
+impl ExecutionStage for Jtype {
+    fn execute(&self, _core: &mut Core) -> Stage {
         match self.opcode {
             _ => panic!(),
         }
     }
 }
 
-impl Execution for Jtype {
-    fn execute(&self, i: &Core) -> Stage {
+impl ExecutionStage for Utype {
+    fn execute(&self, core: &mut Core) -> Stage {
         match self.opcode {
-            _ => panic!(),
-        }
-    }
-}
-
-impl Execution for Utype {
-    fn execute(&self, core: &Core) -> Stage {
-        match self.opcode {
-            opcodes::MajorOpcode::AUIPC => {
+            MajorOpcode::AUIPC => {
                 const M: u32 = 1 << (20 - 1);
                 let se_imm20 = (self.imm20 ^ M) - M;
                 Stage::WRITEBACK(Some(WritebackStage {
@@ -157,88 +258,139 @@ impl Execution for Utype {
     }
 }
 
-impl Execution for CRtype {
-    fn execute(&self, i: &Core) -> Stage {
+impl ExecutionStage for CRtype {
+    fn execute(&self, _core: &mut Core) -> Stage {
         match self.opcode {
             _ => panic!(),
         }
     }
 }
 
-impl Execution for Btype {
-    fn execute(&self, i: &Core) -> Stage {
+impl ExecutionStage for Btype {
+    fn execute(&self, _core: &mut Core) -> Stage {
         match self.opcode {
             _ => panic!(),
         }
     }
 }
 
-impl Execution for Stype {
-    fn execute(&self, i: &Core) -> Stage {
+impl ExecutionStage for Stype {
+    fn execute(&self, _core: &mut Core) -> Stage {
         match self.opcode {
             _ => panic!(),
         }
     }
 }
 
-impl Execution for Rtype {
-    fn execute(&self, i: &Core) -> Stage {
+impl ExecutionStage for Rtype {
+    fn execute(&self, _core: &mut Core) -> Stage {
+        let value = match self.opcode {
+            MajorOpcode::OP => match self.funct7 {
+                // RV32M
+                1 => {
+                    let r1v = _core.read_register(self.rs1);
+                    let r2v = _core.read_register(self.rs2);
+                    match num::FromPrimitive::from_u8(self.funct3).unwrap() {
+                        RV32M_Funct3::MUL => {
+                            Some(_core.bit_extend(r1v.wrapping_mul(r2v) as i64) as u64)
+                        }
+                        RV32M_Funct3::MULH => match _core.xlen {
+                            Xlen::Bits32 => {
+                                Some(_core.bit_extend((r1v as i64 * r2v as i64) >> 32) as u64)
+                            }
+                            Xlen::Bits64 => Some(((r1v as i128) * (r2v as i128) >> 64) as u64),
+                        },
+                        _ => panic!(),
+                    }
+                }
+                _ => todo!("Support non-RV32M OP opcode"),
+            },
+            _ => panic!(),
+        };
+        if value.is_some() {
+            Stage::WRITEBACK(Some(WritebackStage {
+                register: self.rd,
+                value: value.unwrap() as u64,
+            }))
+        } else {
+            Stage::WRITEBACK(None)
+        }
+    }
+}
+
+impl ExecutionStage for CItype {
+    fn execute(&self, _core: &mut Core) -> Stage {
+        match self.opcode {
+            opcodes::CompressedOpcode::C1 => {
+                let rs1v = _core.read_register(self.rd);
+                let value = match self.funct3 {
+                    // C.LUI
+                    0b011 => Some(((self.imm as u64) << 12).sign_extend(64 - 17)),
+                    // C.LI
+                    0b010 => Some((self.imm as u64).sign_extend(64 - 6)),
+                    0b000 => match self.rd {
+                        // NOP
+                        0 => None,
+                        _ => Some(rs1v.wrapping_add((self.imm as u64).sign_extend(64 - 6))),
+                    },
+                    _ => panic!(),
+                };
+                if value.is_some() {
+                    Stage::WRITEBACK(Some(WritebackStage {
+                        register: self.rd,
+                        value: value.unwrap(),
+                    }))
+                } else {
+                    Stage::WRITEBACK(None)
+                }
+            }
+            _ => panic!(),
+        }
+    }
+}
+
+impl ExecutionStage for CSStype {
+    fn execute(&self, _core: &mut Core) -> Stage {
         match self.opcode {
             _ => panic!(),
         }
     }
 }
 
-impl Execution for CItype {
-    fn execute(&self, i: &Core) -> Stage {
+impl ExecutionStage for CIWtype {
+    fn execute(&self, _core: &mut Core) -> Stage {
         match self.opcode {
             _ => panic!(),
         }
     }
 }
 
-impl Execution for CSStype {
-    fn execute(&self, i: &Core) -> Stage {
+impl ExecutionStage for CLtype {
+    fn execute(&self, _core: &mut Core) -> Stage {
         match self.opcode {
             _ => panic!(),
         }
     }
 }
 
-impl Execution for CIWtype {
-    fn execute(&self, i: &Core) -> Stage {
+impl ExecutionStage for CStype {
+    fn execute(&self, _core: &mut Core) -> Stage {
         match self.opcode {
             _ => panic!(),
         }
     }
 }
 
-impl Execution for CLtype {
-    fn execute(&self, i: &Core) -> Stage {
+impl ExecutionStage for CBtype {
+    fn execute(&self, _core: &mut Core) -> Stage {
         match self.opcode {
             _ => panic!(),
         }
     }
 }
 
-impl Execution for CStype {
-    fn execute(&self, i: &Core) -> Stage {
-        match self.opcode {
-            _ => panic!(),
-        }
-    }
-}
-
-impl Execution for CBtype {
-    fn execute(&self, i: &Core) -> Stage {
-        match self.opcode {
-            _ => panic!(),
-        }
-    }
-}
-
-impl Execution for CJtype {
-    fn execute(&self, i: &Core) -> Stage {
+impl ExecutionStage for CJtype {
+    fn execute(&self, _core: &mut Core) -> Stage {
         match self.opcode {
             _ => panic!(),
         }
