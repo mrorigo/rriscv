@@ -22,7 +22,7 @@ pub const COMPRESSED_FORMAT_MAP: [CompressedFormat; 32] = [
     CompressedFormat::CR,
     CompressedFormat::Unknown,
     CompressedFormat::Unknown, // 20
-    CompressedFormat::Unknown,
+    CompressedFormat::CJ,
     CompressedFormat::Unknown,
     CompressedFormat::Unknown,
     CompressedFormat::Unknown,

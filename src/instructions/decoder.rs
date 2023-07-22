@@ -73,7 +73,7 @@ impl InstructionDecoder for Core<'_> {
                     CompressedFormat::CR => DecodedInstruction::CR(CRtype::decode(word as u16)),
                     CompressedFormat::CIW => DecodedInstruction::CIW(CIWtype::decode(word as u16)),
                     CompressedFormat::CL => DecodedInstruction::CL(CLtype::decode(word as u16)),
-                    CompressedFormat::CJ => todo!(),
+                    CompressedFormat::CJ => DecodedInstruction::CJ(CJtype::decode(word as u16)),
                     CompressedFormat::Unknown => {
                         panic!("{} is an unknown compressed opcode index", c_opcode_idx)
                     }

@@ -108,8 +108,20 @@ pub enum C1_Funct3 {
     C_ADDIW = 0b001,
     C_LI = 0b010,
     C_LUI = 0b011, // ADDI16SP shares the opcode
+    C_J = 0b101,
     C_BEQZ = 0b110,
     C_BNEZ = 0b111,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, FromPrimitive)]
+pub enum BRANCH_Funct3 {
+    BEQ = 0b000,
+    BNE = 0b001,
+    BLT = 0b100,
+    BGE = 0b101,
+    BLTU = 0b110,
+    BGEU = 0b111,
 }
 
 #[allow(non_camel_case_types)]

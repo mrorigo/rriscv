@@ -209,11 +209,28 @@ impl Instruction<Itype> {
                 let se_imm12 = (args.imm12 as u64).sign_extend(64 - 12) as i64;
                 let rs1v = core.read_register(args.rs1);
                 let addr = (rs1v as i64 + se_imm12) as u64;
+                // instruction_trace!(println!(
+                //     "LW: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
+                //     rs1v, se_imm12, addr
+                // ));
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ64(addr, args.rd))
+            },
+        }
+    }
+
+    pub fn LBU(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"LBU",
+            args: Some(*args),
+            funct: |core, args| {
+                let se_imm12 = (args.imm12 as u64).sign_extend(64 - 12) as i64;
+                let rs1v = core.read_register(args.rs1);
+                let addr = (rs1v as i64 + se_imm12) as u64;
                 instruction_trace!(println!(
-                    "LD: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
+                    "LBU: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
                     rs1v, se_imm12, addr
                 ));
-                Stage::MEMORY(crate::pipeline::MemoryAccess::READ64(addr, args.rd))
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ8(addr, args.rd))
             },
         }
     }
@@ -296,6 +313,7 @@ impl InstructionSelector<Itype> for Itype {
             MajorOpcode::LOAD => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
                 Load_Funct3::LD => Instruction::LD(self),
                 Load_Funct3::LW => Instruction::LW(self),
+                Load_Funct3::LBU => Instruction::LBU(self),
                 _ => panic!(),
             },
             MajorOpcode::MISC_MEM => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
