@@ -137,6 +137,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "quark"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bef7c3fb9c6c63700d62fee554b1a1b4257d10acfa61c0a56c4380c1be5326f7"
+
+[[package]]
 name = "quote"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -153,6 +159,7 @@ dependencies = [
  "num",
  "num-derive",
  "num-traits",
+ "quark",
 ]
 
 [[package]]
