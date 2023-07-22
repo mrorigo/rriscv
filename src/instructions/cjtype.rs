@@ -24,7 +24,7 @@ impl Instruction<CJtype> {
                 let se_offs = (args.offset as i64).sign_extend(64 - 10) as i64;
                 let target = (core.prev_pc as i64).wrapping_add(se_offs) as u64;
                 instruction_trace!(println!(
-                    "offs: {:#x?} => {:#x?} => {:#x?}",
+                    "C.J: offs: {:#x?} => {:#x?} => {:#x?}",
                     args.offset, se_offs, target
                 ));
                 core.set_pc(target);

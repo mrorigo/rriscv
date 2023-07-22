@@ -28,7 +28,7 @@ impl CompressedFormatDecoder<CLtype> for CLtype {
         CLtype {
             opcode: num::FromPrimitive::from_u8((word & 3) as u8).unwrap(),
             rd: ((word >> 2) & 7) as Register + 8,
-            rs1: ((word >> 7) & 31) as Register + 8,
+            rs1: ((word >> 7) & 7) as Register + 8,
             imm: CLtype::decode_immediate(word as u16),
             funct3: num::FromPrimitive::from_u8(((word >> 13) & 0x7) as u8).unwrap(),
         }
@@ -53,7 +53,7 @@ impl Instruction<CLtype> {
                 let rs1v = core.read_register(args.rs1);
                 let addr = rs1v + args.imm as u64;
                 instruction_trace!(println!(
-                    "LD: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
+                    "C.LW: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
                     rs1v, args.rs1, addr
                 ));
                 instruction_trace!(println!("C.LW x{}, {}(x{})", args.rd, args.imm, args.rs1));

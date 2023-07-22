@@ -1,47 +1,5 @@
 use crate::instructions::{CompressedFormat, InstructionFormat};
 
-pub const COMPRESSED_FORMAT_MAP: [CompressedFormat; 32] = [
-    CompressedFormat::CIW, // 0
-    CompressedFormat::CI,
-    CompressedFormat::CI,
-    CompressedFormat::Unknown,
-    CompressedFormat::Unknown,
-    CompressedFormat::CI,
-    CompressedFormat::Unknown,
-    CompressedFormat::Unknown,
-    CompressedFormat::CL,      // C.LW
-    CompressedFormat::CI,      // C.LI
-    CompressedFormat::Unknown, // 10
-    CompressedFormat::Unknown,
-    CompressedFormat::Unknown,
-    CompressedFormat::CI, // C.LUI , ADDI16SP
-    CompressedFormat::CI, // C.LDSP etc
-    CompressedFormat::Unknown,
-    CompressedFormat::Unknown,
-    CompressedFormat::CS,
-    CompressedFormat::CR,
-    CompressedFormat::Unknown,
-    CompressedFormat::Unknown, // 20
-    CompressedFormat::CJ,
-    CompressedFormat::Unknown,
-    CompressedFormat::Unknown,
-    CompressedFormat::Unknown,
-    CompressedFormat::CB,
-    CompressedFormat::Unknown,
-    CompressedFormat::Unknown,
-    CompressedFormat::CS,
-    CompressedFormat::Unknown,
-    CompressedFormat::CSS,     // C.SDSP,
-    CompressedFormat::Unknown, // 31
-];
-// pub enum CsrInstructionType {
-//     CSRRW = 0b001,
-//     CSRRS = 0b010,
-//     CSRRC = 0b011,
-//     CSRRWI = 0b101,
-//     CSRRSI = 0b110,
-//     CSRRCI = 0b111,
-// }
 pub const FORMAT_MAP: [InstructionFormat; 128] = [
     InstructionFormat::Unknown, /*0000000 */
     InstructionFormat::Unknown, /*0000001 */

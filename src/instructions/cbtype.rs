@@ -20,6 +20,7 @@ pub struct CBtype {
     pub rs1: Register,
     pub offset: u16,
     pub funct3: Funct3,
+    pub imm6: u8,
 }
 
 impl CompressedFormatType for CBtype {}
@@ -30,6 +31,7 @@ impl CompressedFormatDecoder<CBtype> for CBtype {
             opcode: num::FromPrimitive::from_u8((word & 3) as u8).unwrap(),
             rs1: 8 + ((word >> 7) & 3) as u8,
             offset: CBtype::decode_immediate(word as u16),
+            imm6: (((word >> 1) & 0b1111) | ((word >> 12) & 1) << 5) as u8,
             funct3: num::FromPrimitive::from_u8(((word >> 13) & 0x7) as u8).unwrap(),
         }
     }
@@ -86,6 +88,20 @@ impl Instruction<CBtype> {
             },
         }
     }
+
+    pub fn C_ANDI(args: &CBtype) -> Instruction<CBtype> {
+        Instruction {
+            args: Some(*args),
+            mnemonic: "C.ANDI",
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1);
+                let mask = (args.imm6 as i64).sign_extend(64 - 6);
+                let value = rs1v & mask as u64;
+
+                Stage::writeback(args.rs1, value)
+            },
+        }
+    }
 }
 
 impl InstructionSelector<CBtype> for CBtype {
@@ -93,6 +109,7 @@ impl InstructionSelector<CBtype> for CBtype {
         match self.opcode {
             CompressedOpcode::C1 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                 C1_Funct3::C_BEQZ => Instruction::C_BEQZ(self),
+                C1_Funct3::C_ANDI => Instruction::C_ANDI(self),
                 _ => todo!(),
             },
             _ => panic!(),

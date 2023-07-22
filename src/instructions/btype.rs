@@ -58,9 +58,9 @@ impl Instruction<Btype> {
                 let rs2v = core.bit_extend(core.read_register(args.rs2) as i64) as u64;
                 match rs1v == rs2v {
                     false => {
-                        let target = core
-                            .prev_pc
-                            .wrapping_add(args.imm12.sign_extend(64 - 13) as u64);
+                        let se_offs = (args.imm12 as i64).sign_extend(64 - 12);
+                        //println!("BNE: se_offs: {:#x?}", se_offs);
+                        let target = (core.prev_pc as i64).wrapping_add(se_offs) as u64;
                         core.set_pc(target)
                     }
                     _ => {}
@@ -72,15 +72,15 @@ impl Instruction<Btype> {
     pub fn BEQ(args: &Btype) -> Instruction<Btype> {
         Instruction {
             args: Some(*args),
-            mnemonic: "BNE",
+            mnemonic: "BEQ",
             funct: |core, args| {
                 let rs1v = core.bit_extend(core.read_register(args.rs1) as i64) as u64;
                 let rs2v = core.bit_extend(core.read_register(args.rs2) as i64) as u64;
                 match rs1v == rs2v {
                     true => {
-                        let target = core
-                            .prev_pc
-                            .wrapping_add(args.imm12.sign_extend(64 - 13) as u64);
+                        let se_offs = (args.imm12 as i64).sign_extend(64 - 12);
+                        //println!("BNE: se_offs: {:#x?}", se_offs);
+                        let target = (core.prev_pc as i64).wrapping_add(se_offs) as u64;
                         core.set_pc(target)
                     }
                     _ => {}
@@ -100,7 +100,7 @@ impl Display for Instruction<Btype> {
             write!(
                 f,
                 "{} x{},x{},{}",
-                self.mnemonic, args.rs1, args.rs1, args.imm12
+                self.mnemonic, args.rs1, args.rs2, args.imm12
             )
         }
     }

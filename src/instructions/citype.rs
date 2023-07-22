@@ -94,9 +94,9 @@ impl Instruction<CItype> {
             mnemonic: "C.ADDI",
             args: Some(*args),
             funct: |core, args| {
-                let value = core
-                    .read_register(args.rs1_rd)
-                    .wrapping_add((args.imm as u64).sign_extend(64 - 12));
+                let value = (core.read_register(args.rs1_rd) as i64)
+                    .wrapping_add((args.imm as i64).sign_extend(64 - 6))
+                    as u64;
 
                 Stage::writeback(args.rs1_rd, value)
             },
