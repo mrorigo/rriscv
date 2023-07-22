@@ -137,7 +137,7 @@ impl Instruction<CBtype> {
                 };
 
                 let shamt = (args.imm6) & mask;
-                let value = ((rs1v as u64) >> shamt);
+                let value = (rs1v as u64) >> shamt;
                 Stage::writeback(args.rs1, value)
             },
         }

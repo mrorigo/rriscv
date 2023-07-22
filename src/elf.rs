@@ -15,14 +15,14 @@ impl<'a> Loader<'a> {
 
 impl ElfLoader for Loader<'_> {
     fn allocate(&mut self, load_headers: LoadableHeaders) -> Result<(), ElfLoaderErr> {
-        for header in load_headers {
-            // println!(
-            //     "ELF load: allocate vaddr = {:#x} size = {:#x} flags = {}",
-            //     header.virtual_addr(),
-            //     header.mem_size(),
-            //     header.flags()
-            // );
-        }
+        // for header in load_headers {
+        // println!(
+        //     "ELF load: allocate vaddr = {:#x} size = {:#x} flags = {}",
+        //     header.virtual_addr(),
+        //     header.mem_size(),
+        //     header.flags()
+        // );
+        // }
         Ok(())
     }
 

@@ -98,7 +98,7 @@ impl PipelineStages for Core {
         } else {
             return Stage::ENTER_TRAP(TrapCause::InstructionAccessFault);
         }
-        println!("f: pc={:#x?}", self.pc());
+        // println!("f: pc={:#x?}", self.pc());
         // Determine if instruction is compressed
         let instruction = match (instruction & 0x3) == 0x03 {
             true => {
@@ -165,7 +165,7 @@ impl PipelineStages for Core {
                 if value.is_none() {
                     return Stage::ENTER_TRAP(TrapCause::LoadAccessFault(offset));
                 }
-                pipeline_trace!(println!("m:    READ8 @ {:#x?}: {:#x?}", offset, value));
+                // pipeline_trace!(println!("m:    READ8 @ {:#x?}: {:#x?}", offset, value));
                 let value = value.unwrap();
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: register,
@@ -179,7 +179,7 @@ impl PipelineStages for Core {
                 let h = mmu.read8(offset + 1).unwrap() as u16;
                 let l = mmu.read8(offset).unwrap() as u16;
                 let value = (h << 8 | l) as i16 as u64;
-                pipeline_trace!(println!("m:    READ16 @ {:#x?}: {:#x?}", offset, value));
+                // pipeline_trace!(println!("m:    READ16 @ {:#x?}: {:#x?}", offset, value));
 
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: register,
@@ -196,7 +196,7 @@ impl PipelineStages for Core {
             }
             MemoryAccess::READ32(offset, register, sign_extend) => {
                 let value = mmu.read_32(offset).unwrap();
-                pipeline_trace!(println!("m:    READ32 @ {:#x?}: {:#x?}", offset, value));
+                // pipeline_trace!(println!("m:    READ32 @ {:#x?}: {:#x?}", offset, value));
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: register,
                     value: match sign_extend {
@@ -206,17 +206,17 @@ impl PipelineStages for Core {
                 }))
             }
             MemoryAccess::READ64(offset, register, sign_extend) => {
-                let h = mmu.read_32(offset).unwrap();
-                let l = mmu.read_32(offset + 4).unwrap();
+                let l = mmu.read_32(offset).unwrap();
+                let h = mmu.read_32(offset + 4).unwrap();
                 let comp = ((h as u64) << 32) | l as u64;
                 let value = match sign_extend {
                     true => comp.sign_extend(64 - 32),
                     false => comp as u64,
                 };
-                pipeline_trace!(println!(
-                    "m:    READ64 @ {:#x?}: {:#x?} ({:?})",
-                    offset, value, sign_extend
-                ));
+                // pipeline_trace!(println!(
+                //     "m:    READ64 @ {:#x?}: {:#x?} ({:?})",
+                //     offset, value, sign_extend
+                // ));
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: register,
                     value,
@@ -239,8 +239,8 @@ impl PipelineStages for Core {
             }
             MemoryAccess::WRITE64(offset, value) => {
                 pipeline_trace!(println!("m:    WRITE64 @ {:#x?}: {:#x?}", offset, value));
-                mmu.write_32(offset + 4, value as u32);
-                mmu.write_32(offset + 0, (value >> 32) as u32);
+                mmu.write_32(offset + 0, value as u32);
+                mmu.write_32(offset + 4, (value >> 32) as u32);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::AMOSWAP_W(from, rs2v, rd) => {

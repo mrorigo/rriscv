@@ -14,8 +14,8 @@ type CSRRegisters = [RegisterValue; 4096];
 
 macro_rules! cpu_trace {
     ($instr:expr) => {
-        print!("C:");
-        $instr;
+        // print!("C:");
+        // $instr;
     };
 }
 
@@ -257,7 +257,7 @@ impl Core {
                     Some((_last_addr, last_symbol)) => {
                         if sym.0 == pc && last_symbol.ne(&sym.1) {
                             //println!("Push symboltrace: {:?}@{:#x?}", sym.1, sym.0);
-                            cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, sym.1));
+                            // cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, sym.1));
                             self.symboltrace.push_back((pc, sym.1));
                             if self.symboltrace.len() > 20 {
                                 self.symboltrace.pop_front();

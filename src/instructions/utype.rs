@@ -28,7 +28,7 @@ impl FormatDecoder<Utype> for Utype {
             imm: (match word & 0x80000000 {
                 0x80000000 => 0xffffffff00000000,
                 _ => 0,
-            } | ((word as u64) & 0xfffff000)) as u64,
+            } | ((word as u64) & 0xfffff000)),
         }
     }
 }

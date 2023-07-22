@@ -189,8 +189,9 @@ pub enum BRANCH_Funct3 {
 pub enum C2_Funct3 {
     C_SLLI = 0b000, // C.SLLI64 shares funct3
     C_LDSP = 0b011, // C.FLWSP
+    C_LWSP = 0b010,
+    C_SWSP = 0b110,
     B001 = 0b001,
-    B010 = 0b010,
     B100 = 0b100,
     B101 = 0b101,
     C_SDSP = 0b111,

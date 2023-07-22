@@ -200,7 +200,6 @@ impl InstructionSelector<Btype> for Btype {
                 BRANCH_Funct3::BLT => Instruction::BLT(self),
                 BRANCH_Funct3::BLTU => Instruction::BLTU(self),
                 BRANCH_Funct3::BGEU => Instruction::BGEU(self),
-                _ => todo!("Branch instruction"),
             },
             _ => panic!("No such opcode for Btype instruction: {:#?}", self.opcode),
         }

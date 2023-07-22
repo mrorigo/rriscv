@@ -221,10 +221,10 @@ impl Instruction<Itype> {
 
                 let rs1v = core.read_register(args.rs1);
                 let target = (((rs1v as i32).wrapping_add(se_imm12)) as u32 & 0xffffffff) as u64;
-                instruction_trace!(println!(
-                    "JALR x{}={:#x?} target={:#x?}",
-                    args.rs1, rs1v, target
-                ));
+                // instruction_trace!(println!(
+                //     "JALR x{}={:#x?} target={:#x?}",
+                //     args.rs1, rs1v, target
+                // ));
                 core.set_pc(target);
 
                 Stage::writeback(args.rd, value)
@@ -295,7 +295,7 @@ impl Instruction<Itype> {
                 };
 
                 let shamt = (args.imm12) & mask;
-                let value = ((rs1v as u64) >> shamt);
+                let value = (rs1v as u64) >> shamt;
                 Stage::writeback(args.rd, value)
             },
         }
@@ -492,7 +492,7 @@ impl Instruction<Itype> {
         Instruction {
             mnemonic: "EBREAK",
             args: Some(*args),
-            funct: |core, _args| Stage::ENTER_TRAP(crate::cpu::TrapCause::Breakpoint),
+            funct: |_core, _args| Stage::ENTER_TRAP(crate::cpu::TrapCause::Breakpoint),
         }
     }
 
@@ -566,7 +566,6 @@ impl InstructionSelector<Itype> for Itype {
                 }
                 OpImm_Funct3::SLTI => Instruction::SLTI(self),
                 OpImm_Funct3::SLTIU => Instruction::SLTIU(self),
-                _ => panic!(),
             },
             MajorOpcode::SYSTEM => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                 CSR_Funct3::CSRRS => Instruction::CSRRS(self),
@@ -592,7 +591,6 @@ impl InstructionSelector<Itype> for Itype {
                         _ => panic!(),
                     }
                 }
-                _ => panic!("unknown funct3 for OpImm32: {:?}", self.funct3),
             },
             MajorOpcode::LOAD => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                 Load_Funct3::LB => Instruction::LB(self),
@@ -602,7 +600,6 @@ impl InstructionSelector<Itype> for Itype {
                 Load_Funct3::LWU => Instruction::LWU(self),
                 Load_Funct3::LBU => Instruction::LBU(self),
                 Load_Funct3::LHU => Instruction::LHU(self),
-                _ => panic!(),
             },
             MajorOpcode::MISC_MEM => {
                 match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {

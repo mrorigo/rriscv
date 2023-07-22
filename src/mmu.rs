@@ -4,7 +4,6 @@ use include_bytes_aligned::include_bytes_aligned;
 use crate::{
     memory::{MemoryOperations, RAMOperations},
     mmio::{PhysicalMemory, VirtualDevice, CLINT, PLIC, UART, VIRTIO},
-    pipeline::MemoryAccess,
 };
 
 #[derive(Copy, Clone, Debug)]

@@ -82,7 +82,7 @@ impl Instruction<CStype> {
         Instruction {
             args: Some(*args),
             mnemonic: "C.AND",
-            funct: cs_operation!(|core, rs1v, rs2v| rs1v & rs2v),
+            funct: cs_operation!(|_core, rs1v, rs2v| rs1v & rs2v),
         }
     }
 
@@ -116,7 +116,7 @@ impl Instruction<CStype> {
         Instruction {
             args: Some(*args),
             mnemonic: "C.OR",
-            funct: cs_operation!(|core, rs1v, rs2v| rs1v | rs2v),
+            funct: cs_operation!(|_core, rs1v, rs2v| rs1v | rs2v),
         }
     }
 
@@ -124,7 +124,7 @@ impl Instruction<CStype> {
         Instruction {
             args: Some(*args),
             mnemonic: "C.XOR",
-            funct: cs_operation!(|core, rs1v, rs2v| rs1v ^ rs2v),
+            funct: cs_operation!(|_core, rs1v, rs2v| rs1v ^ rs2v),
         }
     }
 

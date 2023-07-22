@@ -82,17 +82,25 @@ impl InstructionDecoder for Core {
                     0 => {
                         // Quadrant 0
                         match num::FromPrimitive::from_u8(funct3).unwrap() {
-                            C0_Funct3::C_LD => CompressedFormat::CI,
                             C0_Funct3::C_ADDI4SPN => CompressedFormat::CIW,
                             C0_Funct3::C_LQ => CompressedFormat::CL,
                             C0_Funct3::C_LW => CompressedFormat::CL,
+                            C0_Funct3::C_LD => CompressedFormat::CL,
                             C0_Funct3::C_SQ => CompressedFormat::CS,
                             C0_Funct3::C_SW => CompressedFormat::CS,
                             C0_Funct3::C_SD => CompressedFormat::CS,
                         }
                     }
                     1 => match num::FromPrimitive::from_u8(funct3).unwrap() {
-                        C1_Funct3::C_ANDI => CompressedFormat::CB,
+                        C1_Funct3::C_ANDI => {
+                            let funct2 = ((word >> 10) & 0b11) as u8;
+                            print!("C_ANDI  funct2: {:?}", funct2);
+                            match funct2 {
+                                0b00 | 0b01 | 0b10 => CompressedFormat::CB, // C.SRLI / C.SRAI / C.ANDI
+                                0b11 => CompressedFormat::CS, // C.SUB/X.XOR/C.OR/C.AND/C.SUBW/C.ADDW
+                                _ => panic!(),
+                            }
+                        }
                         C1_Funct3::C_BEQZ => CompressedFormat::CB,
                         C1_Funct3::C_BNEZ => CompressedFormat::CB,
                         C1_Funct3::C_LI => CompressedFormat::CI,
@@ -103,18 +111,21 @@ impl InstructionDecoder for Core {
                     },
                     2 => match num::FromPrimitive::from_u8(funct3).unwrap() {
                         C2_Funct3::C_LDSP => CompressedFormat::CI,
+                        C2_Funct3::C_LWSP => CompressedFormat::CI,
                         C2_Funct3::C_SLLI => CompressedFormat::CI,
                         C2_Funct3::C_SDSP => CompressedFormat::CSS,
+                        C2_Funct3::C_SWSP => CompressedFormat::CSS,
                         _ => {
-                            let rs2 = ((word >> 2) & 31) as u8;
-                            let funct1 = ((word >> 12) & 1) as u8;
-                            match funct1 {
-                                0 => CompressedFormat::CR, // C.JR
-                                _ => match rs2 {
-                                    0 => todo!("C.EBREAK/C.JALR"),
-                                    _ => CompressedFormat::CR, // C.ADD
-                                },
-                            }
+                            CompressedFormat::CR
+                            // let rs2 = ((word >> 2) & 31) as u8;
+                            // let funct1 = ((word >> 12) & 1) as u8;
+                            // match funct1 {
+                            //     0 => CompressedFormat::CR, // C.JR
+                            //     _ => match rs2 {
+                            //         0 => todo!("C.EBREAK/C.JALR"),
+                            //         _ => CompressedFormat::CR, // C.ADD
+                            //     },
+                            // }
                         }
                     },
                     _ => panic!("no more quadrants, sir"),

@@ -53,9 +53,9 @@ impl MemoryOperations<RAM, u8> for RAM {
         debug_assert!(addr < self.size.checked_add(self.base_address as usize).unwrap() as u64);
 
         let offs = addr - self.base_address;
-        if addr >= 0x80000000 && addr < 0x80002200 {
-            println!("w8 {:#x?} @ {:#x?}", value, addr);
-        }
+        // if addr >= 0x80000000 && addr < 0x80002200 {
+        //     println!("w8 {:#x?} @ {:#x?}", value, addr);
+        // }
         unsafe { ptr::write(self.data.offset(offs as isize), (value & 0xff) as u8) }
         true
     }
@@ -85,9 +85,9 @@ impl MemoryOperations<RAM, u8> for RAM {
             };
             data |= b << (i * 8)
         }
-        if addr <= 0x80002228 && addr > 0x80002200 {
-            println!("r32 {:#x?} => {:#x?}", addr, data);
-        }
+        // if addr <= 0x80002228 && addr > 0x80002200 {
+        //     println!("r32 {:#x?} => {:#x?}", addr, data);
+        // }
         Some(data)
     }
 
