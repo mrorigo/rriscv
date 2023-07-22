@@ -5,6 +5,7 @@ use std::usize;
 use elfloader::VAddr;
 
 use crate::debugger::{Debugger, DebuggerResult};
+use crate::instructions::decoder::InstructionDecoder;
 use crate::mmu::MMU;
 use crate::pipeline::{PipelineStages, Stage};
 
@@ -16,8 +17,8 @@ type CSRRegisters = [RegisterValue; 4096];
 
 macro_rules! cpu_trace {
     ($instr:expr) => {
-        print!("C:");
-        $instr;
+        // print!("C:");
+        // $instr;
     };
 }
 
@@ -56,6 +57,43 @@ impl Display for TrapCause {
     }
 }
 
+impl TrapCause {
+    /// Map TrapCause to a `mcause` CSR register value
+    pub fn get_mcause(&self, xlen: Xlen) -> u64 {
+        let interrupt_bit = match xlen {
+            Xlen::Bits32 => 0x80000000 as u64,
+            Xlen::Bits64 => 0x8000000000000000 as u64,
+            Xlen::Bits128 => panic!("128bit not supported"),
+        };
+        match *self {
+            TrapCause::InstructionAddressMisaligned
+            | TrapCause::InstructionAccessFault(_)
+            | TrapCause::IllegalInstruction(_)
+            | TrapCause::Breakpoint
+            | TrapCause::LoadAddressMisaligned
+            | TrapCause::LoadAccessFault(_)
+            | TrapCause::StoreAddressMisaligned
+            | TrapCause::StoreAccessFault(_)
+            | TrapCause::EnvCallFromUMode
+            | TrapCause::EnvCallFromSMode
+            | TrapCause::EnvCallFromMMode
+            | TrapCause::InstructionPageFault
+            | TrapCause::LoadPageFault
+            | TrapCause::StorePageFault => u16::from(*self) as u64,
+
+            TrapCause::UserSoftwareIrq
+            | TrapCause::SupervisorSoftIrq
+            | TrapCause::MachineSoftIrq
+            | TrapCause::UserTimerIrq
+            | TrapCause::SupervisorTimerIrq
+            | TrapCause::MachineTimerIrq
+            | TrapCause::UserExternalIrq
+            | TrapCause::SupervisorExternalIrq
+            | TrapCause::MachineExternalIrq => (u16::from(*self) - 0x100) as u64 + interrupt_bit,
+        }
+    }
+}
+
 impl From<TrapCause> for u16 {
     fn from(value: TrapCause) -> Self {
         match value {
@@ -85,8 +123,6 @@ impl From<TrapCause> for u16 {
         }
     }
 }
-
-impl TrapCause {}
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
@@ -220,7 +256,7 @@ impl CpuExtensions {
     const RVJ: u64 = 0x0000000000000200;
 }
 
-pub const CYCLES_PER_INSTRUCTION: usize = 5;
+pub const CYCLES_PER_INSTRUCTION: usize = 6;
 
 pub struct Core {
     pub id: u64,
@@ -238,6 +274,7 @@ pub struct Core {
     breakpoint_address: Option<VAddr>,
     pub symbols: HashMap<VAddr, String>,
     pub symboltrace: VecDeque<(VAddr, String)>,
+    pub instruction_decoder: InstructionDecoder,
 }
 
 impl Core {
@@ -261,6 +298,15 @@ impl Core {
             stage: Stage::FETCH,
             symbols: HashMap::new(),
             symboltrace: VecDeque::<(VAddr, String)>::new(),
+            instruction_decoder: InstructionDecoder::create(),
+        }
+    }
+
+    pub fn minimum_value(&self) -> i64 {
+        match self.xlen {
+            Xlen::Bits32 => std::i32::MIN as i64,
+            Xlen::Bits64 => std::i64::MIN,
+            Xlen::Bits128 => panic!(),
         }
     }
 
@@ -484,6 +530,7 @@ impl Core {
     }
 
     pub fn cycle(&mut self, mmu: &mut MMU) {
+        self.cycles = self.cycles + 1;
         if self.step_cycles > 0 {
             self.step_cycles = self.step_cycles - 1;
             if self.step_cycles == 0 {
@@ -498,6 +545,7 @@ impl Core {
                 }
             }
         }
+
         //cpu_trace!(println!("stage: {:?}", self.stage));
         self.stage = match self.stage {
             Stage::TRAP(cause) => self.trap(cause),
@@ -511,9 +559,16 @@ impl Core {
                 _ => Stage::FETCH,
             },
         };
-        mmu.update_privilege_mode(self.pmode);
-        mmu.update_satp(self.read_csr(CSRRegister::satp), self.xlen);
-        mmu.update_mstatus(self.read_csr(CSRRegister::mstatus));
+
+        // Update mmu state if next stage is FETCH
+        match self.stage {
+            Stage::FETCH => {
+                mmu.update_privilege_mode(self.pmode);
+                mmu.update_satp(self.read_csr(CSRRegister::satp), self.xlen);
+                mmu.update_mstatus(self.read_csr(CSRRegister::mstatus));
+            }
+            _ => {}
+        }
     }
 
     //
@@ -562,41 +617,6 @@ impl Core {
             self.write_csr(instrethcsr, self.read_csr(instrethcsr).wrapping_add(1));
         }
         self.write_csr(instretcsr, instret.wrapping_add(1));
-    }
-
-    /// Map TrapCause to a `mcause` CSR register value
-    pub fn get_mcause(&self, xlen: Xlen, value: TrapCause) -> u64 {
-        let interrupt_bit = match xlen {
-            Xlen::Bits32 => 0x80000000 as u64,
-            Xlen::Bits64 => 0x8000000000000000 as u64,
-            Xlen::Bits128 => panic!("128bit not supported"),
-        };
-        match value {
-            TrapCause::InstructionAddressMisaligned
-            | TrapCause::InstructionAccessFault(_)
-            | TrapCause::IllegalInstruction(_)
-            | TrapCause::Breakpoint
-            | TrapCause::LoadAddressMisaligned
-            | TrapCause::LoadAccessFault(_)
-            | TrapCause::StoreAddressMisaligned
-            | TrapCause::StoreAccessFault(_)
-            | TrapCause::EnvCallFromUMode
-            | TrapCause::EnvCallFromSMode
-            | TrapCause::EnvCallFromMMode
-            | TrapCause::InstructionPageFault
-            | TrapCause::LoadPageFault
-            | TrapCause::StorePageFault => u16::from(value) as u64,
-
-            TrapCause::UserSoftwareIrq
-            | TrapCause::SupervisorSoftIrq
-            | TrapCause::MachineSoftIrq
-            | TrapCause::UserTimerIrq
-            | TrapCause::SupervisorTimerIrq
-            | TrapCause::MachineTimerIrq
-            | TrapCause::UserExternalIrq
-            | TrapCause::SupervisorExternalIrq
-            | TrapCause::MachineExternalIrq => (u16::from(value) - 0x100) as u64 + interrupt_bit,
-        }
     }
 }
 

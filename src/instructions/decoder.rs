@@ -53,9 +53,11 @@ pub struct InstructionDecoder {}
 /// Decodes a RawInstruction into a DecodedInstruction variant, which holds the type-
 /// specific parameters for the decoded instruction.
 impl InstructionDecoder {
-    //    fn decode_instruction(&self, instruction: RawInstruction) -> DecodedInstruction;
+    pub fn create() -> InstructionDecoder {
+        InstructionDecoder {}
+    }
 
-    pub fn decode_instruction(instruction: RawInstruction) -> DecodedInstruction {
+    pub fn decode_instruction(&self, instruction: RawInstruction) -> DecodedInstruction {
         let word = instruction.word;
         match instruction.compressed {
             false => {

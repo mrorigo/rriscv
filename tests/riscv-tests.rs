@@ -255,7 +255,7 @@ fn case(name: &str) -> bool {
 
         if tohost_addr != 0 {
             let tohost = mmu.read32(tohost_addr).unwrap();
-            mmu.write32(tohost_addr, 0x01);
+            mmu.write32(tohost_addr, 0x0);
 
             if tohost != 0 {
                 let payload = (tohost << 16 >> 16);

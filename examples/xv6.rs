@@ -1,16 +1,13 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::{thread, time::Duration};
 
 use elfloader::{ElfBinary, VAddr};
-use rriscv::cpu::TrapCause;
+use rriscv::cpu::{PrivMode, TrapCause};
+use rriscv::elf;
 use rriscv::{
     cpu::{self},
-    elf,
-    memory::MemoryOperations,
-    mmu::{MemoryRange, MMU},
+    mmu::MMU,
     pipeline::Stage,
 };
 
@@ -50,7 +47,7 @@ fn main() {
 
     // Start HART #0
     let mut cpu = cpu::Core::create(0x0);
-    cpu.set_pc(vbase);
+    cpu.reset(vbase);
 
     for sym in symbols.iter() {
         cpu.add_symbol(*sym.0 as VAddr, sym.1.to_string());
@@ -65,19 +62,29 @@ fn main() {
     })
     .expect("Error setting Ctrl-C handler");
 
+    let mut oldx10 = 0;
     loop {
-        if stop.load(std::sync::atomic::Ordering::Relaxed) == true {
-            stop.store(false, std::sync::atomic::Ordering::Relaxed);
-            cpu.debug_breakpoint(cpu::TrapCause::Breakpoint, mmu);
-        }
         cpu.cycle(mmu);
-
         match cpu.stage {
             Stage::FETCH => {
+                if stop.load(std::sync::atomic::Ordering::Relaxed) == true {
+                    stop.store(false, std::sync::atomic::Ordering::Relaxed);
+                    cpu.debug_breakpoint(cpu::TrapCause::Breakpoint, mmu);
+                }
+
                 cpu.write_csr(
                     cpu::CSRRegister::mip,
                     mmu.tick(cpu.read_csr(cpu::CSRRegister::mip)),
                 );
+
+                if cpu.pmode() == PrivMode::Supervisor {
+                    let x10 = cpu.read_register(10);
+                    if x10 != oldx10 {
+                        //println!("{:#x?}: x10:{:#x?}", cpu.pc(), x10);
+                        oldx10 = x10;
+                    }
+                    //                    Debugger::dump_status(&mut cpu, mmu);
+                }
             }
             Stage::TRAP(cause) => match cause {
                 TrapCause::Breakpoint => {

@@ -13,12 +13,12 @@ pub fn perf_auipc() {
     let start = Instant::now();
 
     let utype = Utype {
-        imm20: 9,
+        imm: 9,
         opcode: rriscv::instructions::opcodes::MajorOpcode::AUIPC,
         rd: 2,
     };
     let utype2 = Utype {
-        imm20: 1,
+        imm: 1,
         opcode: rriscv::instructions::opcodes::MajorOpcode::AUIPC,
         rd: 2,
     };

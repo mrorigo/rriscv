@@ -38,9 +38,7 @@ pub trait MemoryOperations<T, T2: MemoryCellType> {
     fn read32(&mut self, addr: VAddr) -> Result<u32, TrapCause> {
         todo!()
     }
-    fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause> {
-        todo!()
-    }
+    fn write32(&mut self, addr: VAddr, value: u32) -> Option<TrapCause>;
 
     fn read16(&mut self, addr: VAddr) -> Option<u16> {
         todo!()
@@ -67,7 +65,7 @@ impl MemoryOperations<RAM, u8> for RAM {
         if addr < self.base_address
             || addr >= self.size.checked_add(self.base_address as usize).unwrap() as u64
         {
-            return Some(TrapCause::LoadAccessFault(addr));
+            return Some(TrapCause::StoreAccessFault(addr));
         }
 
         let offs = addr - self.base_address;

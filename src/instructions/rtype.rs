@@ -204,6 +204,106 @@ impl Instruction<Rtype> {
         }
     }
 
+    pub fn MULHSU(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"MULHSU",
+            args: Some(*args),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1);
+                let r2v = core.read_register(args.rs2);
+                let value = match core.xlen {
+                    Xlen::Bits32 => {
+                        core.bit_extend((r1v as i64).wrapping_mul(r2v as u32 as i64) >> 32) as u64
+                    }
+                    Xlen::Bits64 => (((r1v as u128).wrapping_mul(r2v as u128)) >> 64) as u64,
+                    Xlen::Bits128 => panic!("No 128 bit mulhsu"),
+                };
+                println!("MULHSU: r1v: {:#x?}  as u128: {:#x?}", r1v, r1v as u128);
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
+    pub fn REMU(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"REMU",
+            args: Some(*args),
+            funct: |core, args| {
+                let dividend = core.read_register(args.rs1);
+                let divisor = core.read_register(args.rs2);
+                let value = match divisor {
+                    0 => dividend as i32 as i64,
+                    _ => dividend.wrapping_rem(divisor) as i32 as i64,
+                };
+
+                Stage::writeback(args.rd, value as u64)
+            },
+        }
+    }
+
+    pub fn DIVU(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"DIVU",
+            args: Some(*args),
+            funct: |core, args| {
+                let dividend = core.read_register(args.rs1);
+                let divisor = core.read_register(args.rs2);
+                let value = match divisor {
+                    0 => -1 as i64,
+                    _ => dividend.wrapping_div(divisor) as i64,
+                };
+                //println!("DIVUW: r1v: {:#x?} r2v: {:#x?} dividend: {:#x?} divisor: {:#x?}  result: {:#x?}", r1v, r2v, dividend, divisor, value);
+
+                Stage::writeback(args.rd, value as u64)
+            },
+        }
+    }
+
+    pub fn DIV(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"DIV",
+            args: Some(*args),
+            funct: |core, args| {
+                let dividend = core.read_register(args.rs1) as i64;
+                let divisor = core.read_register(args.rs2) as i64;
+                let value = match divisor {
+                    0 => -1 as i64,
+                    _ => {
+                        if dividend == core.minimum_value() && divisor == -1 {
+                            dividend
+                        } else {
+                            dividend.wrapping_div(divisor)
+                        }
+                    }
+                };
+
+                Stage::writeback(args.rd, value as u64)
+            },
+        }
+    }
+
+    pub fn DIVW(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"DIVW",
+            args: Some(*args),
+            funct: |core, args| {
+                let dividend = core.read_register(args.rs1) as i32;
+                let divisor = core.read_register(args.rs2) as i32;
+                let value = match divisor {
+                    0 => -1 as i32,
+                    _ => {
+                        if dividend == std::i32::MIN && divisor == -1 {
+                            dividend
+                        } else {
+                            dividend.wrapping_div(divisor)
+                        }
+                    }
+                };
+
+                Stage::writeback(args.rd, value as u64)
+            },
+        }
+    }
     pub fn SUB(args: &Rtype) -> Instruction<Rtype> {
         Instruction {
             mnemonic: &"SUB",
@@ -370,6 +470,7 @@ impl InstructionSelector<Rtype> for Rtype {
                     RV64M_Funct3::REMUW => Instruction::REMUW(self),
                     RV64M_Funct3::DIVUW => Instruction::DIVUW(self),
                     RV64M_Funct3::MULW => Instruction::MULW(self),
+                    RV64M_Funct3::DIVW => Instruction::DIVW(self),
                     _ => panic!(),
                 },
                 _ => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
@@ -391,7 +492,11 @@ impl InstructionSelector<Rtype> for Rtype {
                 Funct7::B0000001 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                     RV32M_Funct3::MUL => Instruction::MUL(self),
                     RV32M_Funct3::MULH => Instruction::MULH(self),
-                    _ => panic!(),
+                    RV32M_Funct3::REMU => Instruction::REMU(self),
+                    RV32M_Funct3::DIVU => Instruction::DIVU(self),
+                    RV32M_Funct3::DIV => Instruction::DIV(self),
+                    RV32M_Funct3::MULHSU => Instruction::MULHSU(self),
+                    _ => panic!("Unkown funct3 {:#x?}", self.funct3),
                 },
                 Funct7::B0100000 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                     Op_Funct3::ADD_SUB => Instruction::SUB(self),

@@ -2,3 +2,8 @@
 .vscode
 .DS_Store
 /target
+log
+log2
+log.err
+examples/xv6/
+history.txt

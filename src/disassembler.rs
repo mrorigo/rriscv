@@ -9,8 +9,9 @@ pub struct Disassembler {}
 
 impl Disassembler {
     pub fn disassemble(word: u32, xlen: Xlen) -> String {
+        let mut instruction_decoder = InstructionDecoder::create();
         let raw = RawInstruction::from_word(word, 0);
-        let decoded = InstructionDecoder::decode_instruction(raw);
+        let decoded = instruction_decoder.decode_instruction(raw);
         let s = match decoded {
             DecodedInstruction::I(inst) => inst.select(xlen).to_string(),
             DecodedInstruction::U(inst) => inst.select(xlen).to_string(),

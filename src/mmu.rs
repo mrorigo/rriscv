@@ -132,10 +132,10 @@ impl MemoryOperations<MMU, u8> for MMU {
         } else if self.plic.includes(addr) {
             self.plic.read32(addr)
         } else {
-            // panic!(
-            //     "{:#x?} is not mapped to memory: {:#x?} - {:#x?}",
-            //     addr, self.memory.range.start, self.memory.range.end
-            // );
+            panic!(
+                "{:#x?} is not mapped to memory: {:#x?} - {:#x?}",
+                addr, self.memory.range.start, self.memory.range.end
+            );
             return Err(TrapCause::LoadAccessFault(addr));
         };
         Ok(value.unwrap())
@@ -161,7 +161,16 @@ impl MemoryOperations<MMU, u8> for MMU {
     }
 
     fn read64(&mut self, addr: VAddr) -> Result<u64, TrapCause> {
-        todo!()
+        let l = match self.read32(addr) {
+            Err(cause) => return Err(cause),
+            Ok(val) => val,
+        };
+        let h = match self.read32(addr + 4) {
+            Err(cause) => return Err(cause),
+            Ok(val) => val,
+        };
+        let comp = ((h as u64) << 32) | l as u64;
+        Ok(comp)
     }
 
     fn write64(&mut self, _addr: VAddr, _value: u64) -> Option<TrapCause> {

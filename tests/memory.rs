@@ -1,7 +1,4 @@
-use rriscv::{
-    memory::{MemoryOperations, RAM},
-    pipeline::MemoryAccessWidth,
-};
+use rriscv::memory::{MemoryOperations, RAM};
 
 #[test]
 pub fn zero_initialized() {
@@ -26,6 +23,15 @@ pub fn write_read_single() {
     for i in 0..4095 {
         let ret = memory.read8(vbase.wrapping_add(i)).unwrap();
         assert!(ret == (i & 0xff) as u8, "{} != {}", i, ret);
+    }
+
+    for i in (0..4095).step_by(4) {
+        memory.write32(vbase.wrapping_add(i), (i << 13) as u32);
+    }
+
+    for i in (0..4095).step_by(4) {
+        let ret = memory.read32(vbase.wrapping_add(i)).unwrap();
+        assert!(ret == (i << 13) as u32, "{} != {}", i, ret);
     }
 
     //         let ret = memory

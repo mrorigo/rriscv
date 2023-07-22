@@ -4,7 +4,6 @@ use rriscv::{
     self,
     cpu::{self, Core},
     instructions::itype::Itype,
-    instructions::jtype::Jtype,
     instructions::{
         csstype::CSStype,
         decoder::DecodedInstruction,

@@ -146,7 +146,7 @@ pub enum RV32M_Funct3 {
     MUL = 0b000,
     MULH = 0b001,
     MULHSU = 0b010,
-    MULSHU = 0b011,
+    MULHU = 0b011,
     DIV = 0b100,
     DIVU = 0b101,
     REM = 0b110,

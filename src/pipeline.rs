@@ -49,6 +49,7 @@ pub struct RawInstruction {
 }
 
 impl RawInstruction {
+    #[inline]
     pub fn size_in_bytes(&self) -> u64 {
         match self.compressed {
             true => 2,
@@ -140,7 +141,7 @@ impl PipelineStages for Core {
     }
 
     fn decode(&mut self, instruction: &RawInstruction) -> Stage {
-        let decoded = InstructionDecoder::decode_instruction(*instruction);
+        let decoded = self.instruction_decoder.decode_instruction(*instruction);
         pipeline_trace!(println!("d:    {:?}", decoded));
 
         Stage::EXECUTE(decoded)
@@ -223,11 +224,6 @@ impl PipelineStages for Core {
                         true => value as i16 as i32 as u64,
                     },
                 }))
-                // let v = self.mmu.read_16(offset).unwrap();
-                // Stage::WRITEBACK(Some(WritebackStage {
-                //     register: register,
-                //     value: v as u64,
-                // }))
             }
             MemoryAccess::READ32(offset, register, sign_extend) => match mmu.read_32(offset) {
                 Ok(value) => Stage::WRITEBACK(Some(WritebackData {
@@ -270,6 +266,7 @@ impl PipelineStages for Core {
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE16(offset, value) => {
+                pipeline_trace!(println!("m:    WRITE16 @ {:#x?}: {:#x}", offset, value));
                 mmu.write8(offset + 1, (value >> 8) as u8);
                 mmu.write8(offset, (value & 0xff) as u8);
                 Stage::WRITEBACK(None)
@@ -300,7 +297,7 @@ impl PipelineStages for Core {
                     Stage::WRITEBACK(None)
                 } else {
                     //  AMOs can either operate on 64-bit (RV64 only) or 32-bit words in memory.
-                    // For RV64, 32-bit AMOs always sign-extend the value placed in rd. T
+                    // For RV64, 32-bit AMOs always sign-extend the value placed in rd.
                     let value = match self.xlen {
                         Xlen::Bits32 => v1 as u64,
                         Xlen::Bits64 => v1 as i32 as i64 as u64,
@@ -330,7 +327,7 @@ impl PipelineStages for Core {
     }
 
     fn trap(&mut self, cause: TrapCause) -> Stage {
-        let csr_cause = self.get_mcause(self.xlen, cause);
+        let csr_cause = cause.get_mcause(self.xlen);
 
         let mip_mask = match cause {
             TrapCause::SupervisorExternalIrq => Some(MipMask::SEIP),
