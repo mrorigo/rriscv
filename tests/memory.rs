@@ -3,7 +3,8 @@ use rriscv::memory::{Memory, MemoryOperations};
 #[test]
 pub fn zero_initialized() {
     let vbase: u64 = 0x8000_0000;
-    let memory = &mut Memory::create(vbase, 4096);
+    let memory = &mut Memory::create();
+    memory.add_segment(vbase, 4096);
 
     for i in 0..4095 {
         assert!(
@@ -21,7 +22,8 @@ pub fn zero_initialized() {
 #[test]
 pub fn write_read_single() {
     let vbase: u64 = 0x8000_0000;
-    let memory = &mut Memory::create(vbase, 4096);
+    let memory = &mut Memory::create();
+    memory.add_segment(vbase, 4096);
 
     for i in 0..4095 {
         memory.write_single(

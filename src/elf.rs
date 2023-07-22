@@ -1,14 +1,14 @@
 use elfloader::*;
 
-use crate::memory::MemoryOperations;
+use crate::memory::{Memory, MemoryOperations};
 
 pub struct Loader<'a> {
     pub vbase: u64,
-    memory: &'a mut dyn MemoryOperations,
+    memory: &'a mut dyn MemoryOperations<Memory>,
 }
 
 impl<'a> Loader<'a> {
-    pub fn create(vbase: u64, memory: &mut impl MemoryOperations) -> Loader {
+    pub fn create(vbase: u64, memory: &mut impl MemoryOperations<Memory>) -> Loader {
         Loader { vbase, memory }
     }
 }

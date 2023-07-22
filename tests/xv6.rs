@@ -3,6 +3,8 @@ use rriscv::{
     cpu::{self, CSRRegister},
     elf,
     memory::{Memory, MemoryAccessWidth, MemoryOperations},
+    mmu::MMU,
+    pipeline::Stage,
 };
 
 #[test]
@@ -10,7 +12,15 @@ fn main() {
     use std::fs;
 
     let vbase: u64 = 0x8000_0000;
-    let memory = &mut Memory::create(vbase, 138560);
+    let clint_base = 0x2000000;
+    let plic_base = 0x0c000000;
+
+    let mmu = MMU::create();
+
+    let memory = &mut Memory::create();
+    memory.add_segment(vbase, 138560);
+    memory.add_segment(clint_base, 0xc000);
+    memory.add_segment(plic_base, 0x200000 + 0x2000 * 8);
 
     let binary_blob = fs::read("tests/xv6/kernel").expect("Can't read kernel binary");
     //let binary_blob = fs::read("./test").expect("Can't read kernel binary");
@@ -24,7 +34,12 @@ fn main() {
 
     loop {
         cpu.cycle();
-        println!("--- minstret: {}", cpu.read_csr(CSRRegister::minstret));
+        match cpu.stage {
+            Stage::FETCH => {
+                println!("--- minstret: {}", cpu.read_csr(CSRRegister::minstret))
+            }
+            _ => {}
+        }
     }
     // cpu.cycle();
     // cpu.cycle();
