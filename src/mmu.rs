@@ -228,11 +228,13 @@ impl MMU {
                     panic!();
                 }
             },
+            Xlen::Bits128 => panic!("not implemented"),
         };
 
         self.ppn = match xlen {
             Xlen::Bits32 => satp & 0x3fffff,
             Xlen::Bits64 => satp & 0xfffffffffff,
+            Xlen::Bits128 => satp & 0xfffffffffff,
         };
         println!("self.addressing_mode: {:?}", self.addressing_mode);
     }
@@ -429,9 +431,10 @@ impl MMU {
                 if self.memory.includes(addr) {
                     match self.memory.read32(addr) {
                         Ok(value) => Ok(value),
-                        Err(cause) => Err(TrapCause::InstructionAccessFault),
+                        Err(_cause) => Err(TrapCause::InstructionAccessFault(addr)),
                     }
                 } else {
+                    panic!("Cannot fetch from {:#x?}", addr);
                     Err(TrapCause::InstructionPageFault)
                 }
             }

@@ -86,7 +86,7 @@ impl Debugger {
                                 match addr {
                                     Some(addr) => {
                                         let mut offs = 0;
-                                        for i in 0..10 {
+                                        for _i in 0..10 {
                                             let word = mmu.read32(addr.wrapping_add(offs));
 
                                             let poffs = offs;
@@ -192,7 +192,10 @@ impl Debugger {
         let word1 = mmu.read32(core.prev_pc);
         let disasm1 = Disassembler::disassemble(word1.unwrap(), core.xlen);
         let word2 = mmu.read32(core.pc());
-        let disasm2 = Disassembler::disassemble(word2.unwrap(), core.xlen);
+        let disasm2 = match word2 {
+            Err(err) => err.to_string(),
+            Ok(data) => Disassembler::disassemble(data, core.xlen),
+        };
         println!(
             "{:#10x}: {:?}\n{:#10x}: {:?}\nmstatus: {:#6x?}  sstatus: {:#6x?}\npc: {:#10x?} mepc: {:#10x?} sepc: {:#10x?}  pmode: {:?}",
             core.prev_pc, disasm1,

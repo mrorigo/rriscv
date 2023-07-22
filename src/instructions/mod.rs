@@ -80,10 +80,6 @@ pub trait ImmediateDecoder<T, T2> {
     fn decode_immediate(i: T) -> T2;
 }
 
-// pub trait InstructionExcecutor<T: InstructionFormatType> {
-//     fn run(&self, core: &mut Core) -> Stage;
-// }
-
 pub trait InstructionSelector<T> {
     fn select(&self, _xlen: Xlen) -> Instruction<T> {
         todo!();

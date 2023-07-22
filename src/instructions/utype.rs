@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    cpu::{Core, Register, Xlen},
+    cpu::{Register, Xlen},
     pipeline::Stage,
 };
 

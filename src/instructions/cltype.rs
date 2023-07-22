@@ -1,9 +1,6 @@
 use std::fmt::Display;
 
-use crate::{
-    cpu::{Core, Register},
-    pipeline::Stage,
-};
+use crate::{cpu::Register, pipeline::Stage};
 
 use super::{
     functions::{C0_Funct3, Funct3},

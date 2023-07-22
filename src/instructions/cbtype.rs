@@ -3,7 +3,7 @@ use std::fmt::Display;
 use quark::Signs;
 
 use crate::{
-    cpu::{Core, Register, Xlen},
+    cpu::{Register, Xlen},
     pipeline::Stage,
 };
 
@@ -134,6 +134,7 @@ impl Instruction<CBtype> {
                 let mask = match core.xlen {
                     Xlen::Bits32 => 0x1f,
                     Xlen::Bits64 => 0x3f,
+                    Xlen::Bits128 => 0x7f,
                 };
 
                 let shamt = (args.imm6) & mask;
@@ -152,6 +153,7 @@ impl Instruction<CBtype> {
                 let mask = match core.xlen {
                     Xlen::Bits32 => 0x1f,
                     Xlen::Bits64 => 0x3f,
+                    Xlen::Bits128 => 0x7f,
                 };
                 let shamt = (args.imm6) & mask;
                 println!("C.SRAI shamt: {:?}", shamt);

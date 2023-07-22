@@ -1,9 +1,6 @@
 use std::fmt::Display;
 
-use crate::{
-    cpu::{Core, Register},
-    pipeline::Stage,
-};
+use crate::{cpu::Register, pipeline::Stage};
 
 use super::{
     functions::{C0_Funct3, Funct3},
@@ -62,7 +59,12 @@ impl Instruction<CIWtype> {
                 let sp = core.read_register(2);
                 let value = sp.wrapping_add((args.nzuimm as u32) as u64);
                 //println!("ADDI4SPN: sp={:#x?}  r{}={:#x?}", sp, args.rd, value);
-                debug_assert!(args.imm != 0);
+                debug_assert!(
+                    args.nzuimm != 0,
+                    "args.nzuimm: {:#x?}  pc={:#x?}",
+                    args.nzuimm,
+                    core.prev_pc
+                );
                 Stage::writeback(args.rd, value)
             },
         }

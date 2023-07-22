@@ -3,7 +3,7 @@ use std::fmt::Display;
 use quark::Signs;
 
 use crate::{
-    cpu::{Core, Register, Xlen},
+    cpu::{Register, Xlen},
     pipeline::Stage,
 };
 
@@ -109,6 +109,7 @@ impl Instruction<CItype> {
                 let mask = match core.xlen {
                     Xlen::Bits32 => 0x1f,
                     Xlen::Bits64 => 0x3f,
+                    Xlen::Bits128 => 0x7f,
                 };
                 let shamt = (args.imm) & mask;
                 let value = ((rs1v as i64) << shamt) as u64;

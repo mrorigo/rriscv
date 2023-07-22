@@ -3,7 +3,7 @@ use std::fmt::Display;
 use quark::Signs;
 
 use crate::{
-    cpu::{CSRRegister, Core, Register, TrapCause, Xlen},
+    cpu::{CSRRegister, Register, TrapCause, Xlen},
     pipeline::Stage,
 };
 
@@ -70,15 +70,19 @@ impl Instruction<Itype> {
         }
     }
 
-    pub fn CSRWI(args: &Itype) -> Instruction<Itype> {
+    pub fn CSRRWI(args: &Itype) -> Instruction<Itype> {
         Instruction {
-            mnemonic: &"CSRWI",
+            mnemonic: &"CSRRWI",
             args: Some(*args),
             funct: |core, args| {
                 let csr_register = num::FromPrimitive::from_u16(args.imm12).unwrap();
-                core.write_csr(csr_register, args.imm12 as u64);
+                let value = core.read_csr(csr_register);
+                core.write_csr(csr_register, args.rs1 as u64);
 
-                Stage::WRITEBACK(None)
+                match args.rd {
+                    0 => Stage::WRITEBACK(None),
+                    _ => Stage::writeback(args.rd, value),
+                }
             },
         }
     }
@@ -109,11 +113,49 @@ impl Instruction<Itype> {
             funct: |core, args| {
                 let csr_register = num::FromPrimitive::from_u16(args.imm12).unwrap();
                 let value = core.read_csr(csr_register);
-                println!("CSRRC read value {:#x?}", value);
+                println!("CSRRC read {:#x?} value {:#x?}", csr_register, value);
                 if args.rs1 != 0 {
                     let rs1v = core.read_register(args.rs1);
                     core.write_csr(csr_register, value & !rs1v);
                 }
+                match args.rd {
+                    0 => Stage::WRITEBACK(None),
+                    _ => Stage::writeback(args.rd, value),
+                }
+            },
+        }
+    }
+
+    pub fn CSRRCI(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"CSRRCI",
+            args: Some(*args),
+            funct: |core, args| {
+                let csr_register = num::FromPrimitive::from_u16(args.imm12).unwrap();
+                let value = core.read_csr(csr_register);
+                core.write_csr(csr_register, value & !(args.rs1 as u64));
+
+                match args.rd {
+                    0 => Stage::WRITEBACK(None),
+                    _ => Stage::writeback(args.rd, value),
+                }
+            },
+        }
+    }
+
+    pub fn CSRRSI(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"CSRRSI",
+            args: Some(*args),
+            funct: |core, args| {
+                let csr_register = num::FromPrimitive::from_u16(args.imm12).unwrap();
+                let value = core.read_csr(csr_register);
+                let new_value = value | (args.rs1 as u64);
+                println!(
+                    "CSRRSI: reg: {:#x?} value: {:#x?}  new: {:#x?}",
+                    csr_register as u64, value, new_value
+                );
+                core.write_csr(csr_register, new_value);
                 match args.rd {
                     0 => Stage::WRITEBACK(None),
                     _ => Stage::writeback(args.rd, value),
@@ -241,6 +283,7 @@ impl Instruction<Itype> {
                 let mask = match core.xlen {
                     Xlen::Bits32 => 0x1f,
                     Xlen::Bits64 => 0x3f,
+                    Xlen::Bits128 => 0x7f,
                 };
                 let shamt = (args.imm12) & mask;
                 let value = ((rs1v as i64) << shamt) as u64;
@@ -291,6 +334,7 @@ impl Instruction<Itype> {
                 let mask = match core.xlen {
                     Xlen::Bits32 => 0x1f,
                     Xlen::Bits64 => 0x3f,
+                    Xlen::Bits128 => 0x7f,
                 };
 
                 let shamt = (args.imm12) & mask;
@@ -310,6 +354,7 @@ impl Instruction<Itype> {
                 let mask = match core.xlen {
                     Xlen::Bits32 => 0x1f,
                     Xlen::Bits64 => 0x3f,
+                    Xlen::Bits128 => 0x7f,
                 };
 
                 let shamt = (args.imm12) & mask;
@@ -343,6 +388,7 @@ impl Instruction<Itype> {
                 let mask = match core.xlen {
                     Xlen::Bits32 => 0x1f,
                     Xlen::Bits64 => 0x3f,
+                    Xlen::Bits128 => 0x7f,
                 };
 
                 let shamt = (args.imm12) & mask;
@@ -517,6 +563,7 @@ impl Instruction<Itype> {
                     crate::cpu::PrivMode::Reserved => panic!(),
                     crate::cpu::PrivMode::Machine => TrapCause::EnvCallFromMMode,
                 };
+                println!("ECALL");
                 // NOP for now
                 Stage::TRAP(cause)
             },
@@ -537,12 +584,15 @@ impl Instruction<Itype> {
                     _ => 0,
                 };
                 // Write MPIE[7] to MIE[3], set MPIE[7] to 1, set MPP[12:11] to 0 and write 1 to MPRV[17]
-                let new_status = (status & !0x21888) | (mprv << 17) | (mpie << 3) | (1 << 7);
+                // 10 0001 1000 1000 1000
+                //                let new_status = (status & !0x21888) | (mprv << 17) | (mpie << 3) | (1 << 7);
+                let new_status = (status & !0x21888) | (mpie << 3) | (1 << 7) & (!(3 << 11));
+
                 core.write_csr(CSRRegister::mstatus, new_status);
 
                 // mpp is the privilege level the CPU was in prior to trapping to machine privilege mode
                 core.set_pmode(num::FromPrimitive::from_u8(mpp as u8).unwrap());
-
+                println!("MRET. mpp={:?}", mpp);
                 Stage::WRITEBACK(None)
             },
         }
@@ -631,16 +681,22 @@ impl InstructionSelector<Itype> for Itype {
             MajorOpcode::SYSTEM => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                 CSR_Funct3::CSRRS => Instruction::CSRRS(self),
                 CSR_Funct3::CSRRW => Instruction::CSRRW(self),
-                CSR_Funct3::CSRWI => Instruction::CSRWI(self),
                 CSR_Funct3::CSRRC => Instruction::CSRRC(self),
+                CSR_Funct3::CSRRWI => Instruction::CSRRWI(self),
+                CSR_Funct3::CSRRSI => Instruction::CSRRSI(self),
+                CSR_Funct3::CSRRCI => Instruction::CSRRCI(self),
                 CSR_Funct3::ECALL_EBREAK_MRET => match self.funct7 {
                     Funct7::B0001000 => Instruction::SRET(self),
                     Funct7::B0011000 => Instruction::MRET(self),
                     Funct7::B0001001 => Instruction::SFENCE_WMA(self),
                     //Funct7::B0000000 => Instruction::ECALL(self),
                     _ => {
-                        //println!("self.funct7 : {:#?}", self.funct7);
-                        Instruction::EBREAK(self)
+                        if self.rd == 0 && self.rs1 == 0 && self.imm12 == 0 {
+                            Instruction::ECALL(self)
+                        } else {
+                            //println!("self.funct7 : {:#?}", self.funct7);
+                            Instruction::EBREAK(self)
+                        }
                     } //_ => panic!(),
                 },
                 _ => panic!("Unknown SYSTEM instruction"),
@@ -670,7 +726,7 @@ impl InstructionSelector<Itype> for Itype {
             MajorOpcode::MISC_MEM => {
                 match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                     MiscMem_Funct3::FENCE => Instruction::FENCE(self),
-                    MiscMem_Funct3::FENCE_I => todo!(),
+                    MiscMem_Funct3::FENCE_I => Instruction::FENCE(self),
                 }
             }
             _ => panic!(),

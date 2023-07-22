@@ -11,11 +11,18 @@
 		},
 		{
 			"path": "../../criscv"
+		},
+		{
+			"path": "../../../git/qemu"
 		}
 	],
 	"settings": {
 		"files.associations": {
-			"random": "c"
+			"random": "c",
+			"defs.h": "c",
+			"proc.h": "c",
+			"spinlock.h": "c",
+			"param.h": "c"
 		}
 	}
 }

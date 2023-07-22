@@ -1,5 +1,3 @@
-use std::char::MAX;
-
 use elfloader::{PAddr, VAddr};
 
 use crate::{

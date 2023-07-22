@@ -4,7 +4,7 @@ use elfloader::VAddr;
 use quark::Signs;
 
 use crate::{
-    cpu::{Core, Register, Xlen},
+    cpu::{Register, Xlen},
     pipeline::{MemoryAccess, Stage},
 };
 

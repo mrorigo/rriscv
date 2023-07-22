@@ -104,7 +104,7 @@ pub enum OpImm32_Funct3 {
 pub enum Op32_Funct3 {
     ADDW_SUBW = 0b000,
     SLLW = 0b001,
-    SRLW = 0b101,
+    SRAW_SRLW = 0b101,
 }
 
 #[allow(non_camel_case_types)]
@@ -135,9 +135,9 @@ pub enum CSR_Funct3 {
     CSRRW = 0b001,
     CSRRS = 0b010,
     CSRRC = 0b011,
-    CSRWI = 0b101,
-    CSRSI = 0b110,
-    CSRCI = 0b111,
+    CSRRWI = 0b101,
+    CSRRSI = 0b110,
+    CSRRCI = 0b111,
 }
 
 #[allow(non_camel_case_types)]

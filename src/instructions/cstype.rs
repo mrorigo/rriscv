@@ -99,15 +99,15 @@ impl Instruction<CStype> {
     cs_instruction!(
         C_AND,
         "C.AND",
-        cs_operation!(|core, rs1v, rs2v| rs1v & rs2v)
+        cs_operation!(|_core, rs1v, rs2v| rs1v & rs2v)
     );
 
-    cs_instruction!(C_OR, "C.OR", cs_operation!(|core, rs1v, rs2v| rs1v | rs2v));
+    cs_instruction!(C_OR, "C.OR", cs_operation!(|_core, rs1v, rs2v| rs1v | rs2v));
 
     cs_instruction!(
         C_XOR,
         "C.XOR",
-        cs_operation!(|core, rs1v, rs2v| rs1v ^ rs2v)
+        cs_operation!(|_core, rs1v, rs2v| rs1v ^ rs2v)
     );
 
     cs_instruction!(

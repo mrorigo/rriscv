@@ -7,7 +7,6 @@
 //! takes one or several more extra match arms.
 
 use crate::{
-    cpu::Core,
     instructions::{functions::C0_Funct3, map::FORMAT_MAP, CompressedFormat, InstructionFormat},
     pipeline::RawInstruction,
 };
@@ -94,7 +93,6 @@ impl InstructionDecoder {
                     1 => match num::FromPrimitive::from_u8(funct3).unwrap() {
                         C1_Funct3::C_ANDI => {
                             let funct2 = ((word >> 10) & 0b11) as u8;
-                            print!("C_ANDI  funct2: {:?}", funct2);
                             match funct2 {
                                 0b00 | 0b01 | 0b10 => CompressedFormat::CB, // C.SRLI / C.SRAI / C.ANDI
                                 0b11 => CompressedFormat::CS, // C.SUB/X.XOR/C.OR/C.AND/C.SUBW/C.ADDW

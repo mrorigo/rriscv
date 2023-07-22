@@ -84,7 +84,7 @@ pub const FORMAT_MAP: [InstructionFormat; 128] = [
     InstructionFormat::Unknown, /*1010000 */
     InstructionFormat::Unknown, /*1010001 */
     InstructionFormat::Unknown, /*1010010 */
-    InstructionFormat::Unknown, /*1010011 */
+    InstructionFormat::Unknown, /*1010011 OP-FP  */
     InstructionFormat::Unknown, /*1010100 */
     InstructionFormat::Unknown, /*1010101 */
     InstructionFormat::Unknown, /*1010110 */

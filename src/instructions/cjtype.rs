@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use quark::Signs;
 
-use crate::{cpu::Core, pipeline::Stage};
+use crate::pipeline::Stage;
 
 use super::{
     functions::C1_Funct3, opcodes::CompressedOpcode, CompressedFormatDecoder, CompressedFormatType,

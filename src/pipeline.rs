@@ -13,8 +13,8 @@ use crate::{
 
 macro_rules! pipeline_trace {
     ($instr:expr) => {
-        // print!("P: ");
-        // $instr;
+        print!("P: ");
+        $instr;
     };
 }
 
@@ -86,7 +86,7 @@ impl RawInstruction {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct WritebackStage {
+pub struct WritebackData {
     pub register: Register,
     pub value: u64,
 }
@@ -97,15 +97,15 @@ pub enum Stage {
     TRAP(TrapCause),
     FETCH,
     DECODE(RawInstruction),
-    EXECUTE(DecodedInstruction),       // May be skipped (by eg NOP)
-    MEMORY(MemoryAccess),              // May be skipped
-    WRITEBACK(Option<WritebackStage>), // This stage is ALWAYS executed
+    EXECUTE(DecodedInstruction),      // May be skipped (by eg NOP)
+    MEMORY(MemoryAccess),             // May be skipped
+    WRITEBACK(Option<WritebackData>), // This stage is ALWAYS executed
     IRQ,
 }
 
 impl Stage {
     pub fn writeback(register: Register, value: RegisterValue) -> Stage {
-        Stage::WRITEBACK(Some(WritebackStage { register, value }))
+        Stage::WRITEBACK(Some(WritebackData { register, value }))
     }
 }
 
@@ -115,8 +115,15 @@ pub trait PipelineStages {
     fn execute(&mut self, decoded: &DecodedInstruction) -> Stage;
     fn memory(&mut self, mmu: &mut MMU, memory_access: &MemoryAccess) -> Stage;
 
-    fn writeback(&mut self, writeback: Option<WritebackStage>) -> Stage;
+    fn writeback(&mut self, writeback: Option<WritebackData>) -> Stage;
     fn trap(&mut self, cause: TrapCause) -> Stage;
+}
+
+macro_rules! exec {
+    ($core:expr, $instr:expr, $typ:expr) => {
+        pipeline_trace!(println!("P:x:     {:?}", $instr.to_string()));
+        return ($instr.funct)($core, $typ);
+    };
 }
 
 impl PipelineStages for Core {
@@ -128,7 +135,7 @@ impl PipelineStages for Core {
                 self.add_pc(ri.size_in_bytes());
                 Stage::DECODE(ri)
             }
-            _ => Stage::TRAP(TrapCause::InstructionAccessFault),
+            Err(cause) => Stage::TRAP(cause),
         }
     }
 
@@ -141,20 +148,48 @@ impl PipelineStages for Core {
 
     fn execute(&mut self, decoded: &DecodedInstruction) -> Stage {
         match *decoded {
-            DecodedInstruction::I(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
-            DecodedInstruction::U(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
-            DecodedInstruction::CI(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
-            DecodedInstruction::J(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
-            DecodedInstruction::CR(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
-            DecodedInstruction::B(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
-            DecodedInstruction::S(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
-            DecodedInstruction::R(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
-            DecodedInstruction::CSS(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
-            DecodedInstruction::CIW(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
-            DecodedInstruction::CL(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
-            DecodedInstruction::CS(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
-            DecodedInstruction::CB(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
-            DecodedInstruction::CJ(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
+            DecodedInstruction::I(typ) => {
+                exec!(self, typ.select(self.xlen), &typ);
+            }
+            DecodedInstruction::U(typ) => {
+                exec!(self, typ.select(self.xlen), &typ);
+            }
+            DecodedInstruction::CI(typ) => {
+                exec!(self, typ.select(self.xlen), &typ);
+            }
+            DecodedInstruction::J(typ) => {
+                exec!(self, typ.select(self.xlen), &typ);
+            }
+            DecodedInstruction::CR(typ) => {
+                exec!(self, typ.select(self.xlen), &typ);
+            }
+            DecodedInstruction::B(typ) => {
+                exec!(self, typ.select(self.xlen), &typ);
+            }
+            DecodedInstruction::S(typ) => {
+                exec!(self, typ.select(self.xlen), &typ);
+            }
+            DecodedInstruction::R(typ) => {
+                exec!(self, typ.select(self.xlen), &typ);
+            }
+            DecodedInstruction::CSS(typ) => {
+                exec!(self, typ.select(self.xlen), &typ);
+            }
+            DecodedInstruction::CIW(typ) => {
+                exec!(self, typ.select(self.xlen), &typ);
+            }
+            DecodedInstruction::CL(typ) => {
+                exec!(self, typ.select(self.xlen), &typ);
+            }
+            DecodedInstruction::CS(typ) => {
+                exec!(self, typ.select(self.xlen), &typ);
+            }
+            DecodedInstruction::CB(typ) => {
+                exec!(self, typ.select(self.xlen), &typ);
+            }
+            DecodedInstruction::CJ(typ) => {
+                exec!(self, typ.select(self.xlen), &typ);
+            }
         }
     }
 
@@ -167,7 +202,7 @@ impl PipelineStages for Core {
                 }
                 // pipeline_trace!(println!("m:    READ8 @ {:#x?}: {:#x?}", offset, value));
                 let value = value.unwrap();
-                Stage::WRITEBACK(Some(WritebackStage {
+                Stage::WRITEBACK(Some(WritebackData {
                     register: register,
                     value: match sign_extend {
                         false => value as u64,
@@ -181,7 +216,7 @@ impl PipelineStages for Core {
                 let value = (h << 8 | l) as i16 as u64;
                 // pipeline_trace!(println!("m:    READ16 @ {:#x?}: {:#x?}", offset, value));
 
-                Stage::WRITEBACK(Some(WritebackStage {
+                Stage::WRITEBACK(Some(WritebackData {
                     register: register,
                     value: match sign_extend {
                         false => (value & 0xffff) as u64,
@@ -195,7 +230,7 @@ impl PipelineStages for Core {
                 // }))
             }
             MemoryAccess::READ32(offset, register, sign_extend) => match mmu.read_32(offset) {
-                Ok(value) => Stage::WRITEBACK(Some(WritebackStage {
+                Ok(value) => Stage::WRITEBACK(Some(WritebackData {
                     register: register,
                     value: match sign_extend {
                         true => value as i32 as i64 as u64,
@@ -224,7 +259,7 @@ impl PipelineStages for Core {
                 //     "m:    READ64 @ {:#x?}: {:#x?} ({:?})",
                 //     offset, value, sign_extend
                 // ));
-                Stage::WRITEBACK(Some(WritebackStage {
+                Stage::WRITEBACK(Some(WritebackData {
                     register: register,
                     value,
                 }))
@@ -255,7 +290,7 @@ impl PipelineStages for Core {
                 //let v2 = mmu.read_32(to).unwrap();
                 mmu.write_32(from, rs2v as u32);
                 pipeline_trace!(println!(
-                    "m:    AMOSWAP.W @ {:#x?} = {:#x?} now {:#x?}",
+                    "m:    AMOSWAP.W @ {:#x?} was {:#x?}, now {:#x?}",
                     from, v1, rs2v
                 ));
 
@@ -269,6 +304,7 @@ impl PipelineStages for Core {
                     let value = match self.xlen {
                         Xlen::Bits32 => v1 as u64,
                         Xlen::Bits64 => v1 as i32 as i64 as u64,
+                        Xlen::Bits128 => panic!("v1  as i64 as u128"),
                     };
                     Stage::writeback(rd, value as u64)
                 }
@@ -277,7 +313,7 @@ impl PipelineStages for Core {
         }
     }
 
-    fn writeback(&mut self, writeback: Option<WritebackStage>) -> Stage {
+    fn writeback(&mut self, writeback: Option<WritebackData>) -> Stage {
         match writeback {
             Some(wb) if wb.register > 0 => {
                 pipeline_trace!(println!("w: x{} = {:#x?}", wb.register, wb.value));
@@ -295,6 +331,7 @@ impl PipelineStages for Core {
 
     fn trap(&mut self, cause: TrapCause) -> Stage {
         let csr_cause = self.get_mcause(self.xlen, cause);
+
         let mip_mask = match cause {
             TrapCause::SupervisorExternalIrq => Some(MipMask::SEIP),
             TrapCause::SupervisorTimerIrq => Some(MipMask::STIP),
@@ -411,7 +448,7 @@ impl PipelineStages for Core {
                 _ => epc_value,
             };
         }
-        println!("IRQ NOT masked out 2!");
+        println!("Trap not masked out!. epc: {:#x?}", epc_value);
 
         // Masking passed, execute trap
         self.set_pmode(new_privilege_mode);
@@ -445,10 +482,12 @@ impl PipelineStages for Core {
         };
 
         self.write_csr(epc_address, epc_value);
+        println!("IRQ: writing cause to {:?}: {:#x?}", cause, csr_cause);
         self.write_csr(cause_reg, csr_cause);
         self.write_csr(tval_reg, self.pc()); // @TODO: Not always correct (could be -4 for IllegalInstruction etc?)
 
         let tvec_val = self.read_csr(tvec_reg);
+        //print!("tvec_val from {:?}: {:#x?}", tvec_reg, tvec_val);
         self.set_pc(tvec_val);
         //println!("trap: tvec_reg={:?}", tvec_reg);
         // Add 4 * cause if tvec has vector type address

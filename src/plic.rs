@@ -101,7 +101,7 @@ impl PLIC {
 
         self.irq = irq;
         if self.irq != 0 {
-            println!("PLIC IRQ: {:X}", self.irq);
+            println!("PLIC: IRQ: {:X}", self.irq);
         }
 
         mip | (if irq != 0 { MipMask::SEIP as u64 } else { 0 })

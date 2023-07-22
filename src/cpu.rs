@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::fmt::Display;
 use std::usize;
 
 use elfloader::VAddr;
@@ -15,8 +16,8 @@ type CSRRegisters = [RegisterValue; 4096];
 
 macro_rules! cpu_trace {
     ($instr:expr) => {
-        // print!("C:");
-        // $instr;
+        print!("C:");
+        $instr;
     };
 }
 
@@ -34,7 +35,7 @@ pub enum TrapCause {
     MachineExternalIrq = 0x10B,
 
     InstructionAddressMisaligned = 0,
-    InstructionAccessFault = 1,
+    InstructionAccessFault(VAddr) = 1,
     IllegalInstruction(VAddr) = 2,
     Breakpoint = 3,
     LoadAddressMisaligned = 4,
@@ -49,11 +50,17 @@ pub enum TrapCause {
     StorePageFault = 15,
 }
 
+impl Display for TrapCause {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", *self)
+    }
+}
+
 impl From<TrapCause> for u16 {
     fn from(value: TrapCause) -> Self {
         match value {
             TrapCause::InstructionAddressMisaligned => 0,
-            TrapCause::InstructionAccessFault => 1,
+            TrapCause::InstructionAccessFault(_) => 1,
             TrapCause::IllegalInstruction(_) => 2,
             TrapCause::Breakpoint => 3,
             TrapCause::LoadAddressMisaligned => 4,
@@ -84,9 +91,9 @@ impl TrapCause {}
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
 pub enum Xlen {
-    Bits32 = 32, // there is really no support for 32-bit only yet
+    Bits32 = 32,
     Bits64 = 64,
-    //Bits128 = 128,  // nor any for 128-bit
+    Bits128 = 128,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug, FromPrimitive, PartialOrd)]
@@ -186,6 +193,33 @@ pub enum CSRRegister {
     mconfigptr = 0xf15,
 }
 
+#[allow(non_snake_case)]
+pub struct CpuExtensions {}
+impl CpuExtensions {
+    // Base Integer Instruction Set
+    const RVI: u64 = 0x0000000000000100;
+    // Embedded (16 regs)
+    const RVE: u64 = 0x0000000000000010;
+    // Standard Extension for Integer Multiplication and Division
+    const RVM: u64 = 0x0000000000001000;
+    // Atomic Instructions
+    const RVA: u64 = 0x0000000000000001;
+    //    const RVF: u64 = 0x0000000000000020;
+    const RVD: u64 = 0x0000000000000008;
+    // Standard Extension for Vector Operations
+    const RVV: u64 = 0x0000000000200000;
+    // Compressed Instructions
+    const RVC: u64 = 0x0000000000000004;
+    // Supervisor mode
+    const RVS: u64 = 0x0000000000040000;
+    // User Mode
+    const RVU: u64 = 0x0000000000100000;
+    // Hypervisor
+    const RVH: u64 = 0x0000000000000080;
+    // Dynamically Translated Languages
+    const RVJ: u64 = 0x0000000000000200;
+}
+
 pub const CYCLES_PER_INSTRUCTION: usize = 5;
 
 pub struct Core {
@@ -222,7 +256,7 @@ impl Core {
             prev_pc: 0,
             cycles: 0,
             step_cycles: 0,
-            breakpoint_address: Some(0x80000000),
+            breakpoint_address: None, //Some(0x8000076a),
             wfi: false,
             stage: Stage::FETCH,
             symbols: HashMap::new(),
@@ -238,6 +272,28 @@ impl Core {
     pub fn reset(&mut self, pc: u64) {
         self.pc = pc;
         self.stage = Stage::FETCH;
+        let (mxl, bits) = match self.xlen {
+            Xlen::Bits32 => (1, 32),
+            Xlen::Bits64 => (2, 64),
+            Xlen::Bits128 => (3, 128),
+        };
+
+        let unsupported = CpuExtensions::RVH // hypervisor
+            | CpuExtensions::RVE // embedded
+            | CpuExtensions::RVV // vector
+            | CpuExtensions::RVJ // dynlang
+            | CpuExtensions::RVD; // double floats;
+        let supported = CpuExtensions::RVA
+            | CpuExtensions::RVI
+            | CpuExtensions::RVC
+            | CpuExtensions::RVM // int mul/div
+            | CpuExtensions::RVS // supervisor mode
+            | CpuExtensions::RVU // user mode
+            | (bits - 2);
+        self.write_csr(CSRRegister::misa, supported & (!unsupported));
+
+        // Set mxl
+        self.csrs[CSRRegister::mstatus as usize] = self.read_csr(CSRRegister::mstatus) | (2 << 31)
     }
 
     #[inline]
@@ -255,23 +311,23 @@ impl Core {
         match self.symbols.get(&addr) {
             Some(symbol) => Some((addr, symbol.clone())),
             None => {
-                None
-                // let unknown_str = "<unknown>".to_string();
-                // let unknown = Some(unknown_str);
-                // let mut closest = None;
-                // let mut closest_dist = 1e6 as u64;
-                // for sym in self.symbols.iter() {
-                //     let dist = i64::abs(addr as i64 - *sym.0 as i64) as u64;
-                //     if dist < closest_dist && dist > 0 && *sym.0 < addr {
-                //         closest = Some(sym.clone()); //sym.1.clone());
-                //         closest_dist = dist;
-                //     }
-                // }
-                // if closest.is_some() {
-                //     Some((*closest.unwrap().0, closest.unwrap().1.clone()))
-                // } else {
-                //     None
-                // }
+                // None
+                let unknown_str = "<unknown>".to_string();
+                let unknown = Some(unknown_str);
+                let mut closest = None;
+                let mut closest_dist = 1e6 as u64;
+                for sym in self.symbols.iter() {
+                    let dist = i64::abs(addr as i64 - *sym.0 as i64) as u64;
+                    if dist < closest_dist && dist > 0 && *sym.0 < addr {
+                        closest = Some(sym.clone()); //sym.1.clone());
+                        closest_dist = dist;
+                    }
+                }
+                if closest.is_some() {
+                    Some((*closest.unwrap().0, closest.unwrap().1.clone()))
+                } else {
+                    None
+                }
             }
         }
     }
@@ -326,6 +382,7 @@ impl Core {
         let res = match self.xlen {
             Xlen::Bits32 => ((value as i32) as u32 & 0xffffffff) as i64,
             Xlen::Bits64 => value,
+            Xlen::Bits128 => value,
         };
         //println!("bit_extend ({:?}) {:#x?} => {:#x?}", self.xlen, value, res);
         res
@@ -342,6 +399,10 @@ impl Core {
             CSRRegister::sie => self.csrs[CSRRegister::mie as usize] & 0x222,
             CSRRegister::sip => self.csrs[CSRRegister::mip as usize] & 0x222,
             CSRRegister::time => todo!(),
+            CSRRegister::mstatus => {
+                let uxl = ((self.xlen as u64) / 32) << 32;
+                self.csrs[CSRRegister::sstatus as usize] | uxl
+            }
             _ => self.csrs[reg as usize],
         };
         //cpu_trace!(println!("read_csr {:#x?} = {:#x?}", reg, value));
@@ -366,6 +427,7 @@ impl Core {
                 self.csrs[CSRRegister::mstatus as usize] |= value & 0x80000003000de162;
             }
             CSRRegister::sie => {
+                // sie is subset of mie
                 self.csrs[CSRRegister::mie as usize] &= !0x222;
                 self.csrs[CSRRegister::mie as usize] |= value & 0x222;
             }
@@ -379,7 +441,7 @@ impl Core {
             CSRRegister::mstatus => {
                 self.csrs[CSRRegister::mstatus as usize] &= !0x80000003000de162;
                 self.csrs[CSRRegister::mstatus as usize] |= value & 0x80000003000de162;
-                //                self.csrs[CSRRegister::mstatus as usize] = value;
+                //     //                self.csrs[CSRRegister::mstatus as usize] = value;
             }
             CSRRegister::time => todo!(),
 
@@ -387,13 +449,16 @@ impl Core {
                 self.csrs[reg as usize] = value;
             }
         }
-        if reg == CSRRegister::sstatus || reg == CSRRegister::mstatus {
-            if self.csrs[reg as usize] != old {
-                println!(
-                    "-> {:?} csr set: {:#x?}  ({:#x?})",
-                    reg, self.csrs[reg as usize], value
-                );
-            }
+        if reg == CSRRegister::sie || reg == CSRRegister::mstatus {
+            //if self.csrs[reg as usize] != old {
+            println!(
+                "-> {:?} csr set: now: {:#x?}  (arg:{:#x?}) mie: {:#x?}",
+                reg,
+                self.csrs[reg as usize],
+                value,
+                self.csrs[CSRRegister::mie as usize]
+            );
+            //}
         }
 
         //cpu_trace!(println!("write_csr {:#x?} = {:#x?}", reg, value));
@@ -428,7 +493,7 @@ impl Core {
         match self.breakpoint_address {
             None => {}
             Some(addr) => {
-                if self.pc == addr && self.pmode == PrivMode::Supervisor {
+                if self.pc == addr {
                     self.debug_breakpoint(TrapCause::Breakpoint, mmu);
                 }
             }
@@ -504,10 +569,11 @@ impl Core {
         let interrupt_bit = match xlen {
             Xlen::Bits32 => 0x80000000 as u64,
             Xlen::Bits64 => 0x8000000000000000 as u64,
+            Xlen::Bits128 => panic!("128bit not supported"),
         };
         match value {
             TrapCause::InstructionAddressMisaligned
-            | TrapCause::InstructionAccessFault
+            | TrapCause::InstructionAccessFault(_)
             | TrapCause::IllegalInstruction(_)
             | TrapCause::Breakpoint
             | TrapCause::LoadAddressMisaligned

@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    cpu::{Core, Register, Xlen},
+    cpu::{Register, Xlen},
     pipeline::{MemoryAccess, Stage},
 };
 
@@ -197,6 +197,7 @@ impl Instruction<Rtype> {
                 let value = match core.xlen {
                     Xlen::Bits32 => core.bit_extend((r1v as i64 * r2v as i64) >> 32) as u64,
                     Xlen::Bits64 => ((r1v as i128) * (r2v as i128) >> 64) as u64,
+                    Xlen::Bits128 => panic!("No 128 bit mul"),
                 };
                 Stage::writeback(args.rd, value)
             },
@@ -263,6 +264,18 @@ impl Instruction<Rtype> {
                 let r1v = core.read_register(args.rs1) as u32;
                 let r2v = core.read_register(args.rs2) as u32;
                 let value = r1v.wrapping_shr(r2v) as u32 as i32 as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+    pub fn SRAW(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"SRAW",
+            args: Some(*args),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1) as u32;
+                let r2v = core.read_register(args.rs2) as u32;
+                let value = (r1v as i32).wrapping_shr(r2v as u32) as u64;
                 Stage::writeback(args.rd, value)
             },
         }
@@ -360,8 +373,12 @@ impl InstructionSelector<Rtype> for Rtype {
                     _ => panic!(),
                 },
                 _ => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
-                    Op32_Funct3::SRLW => Instruction::SRLW(self),
                     Op32_Funct3::SLLW => Instruction::SLLW(self),
+                    Op32_Funct3::SRAW_SRLW => match self.funct7 {
+                        Funct7::B0000000 => Instruction::SRLW(self),
+                        Funct7::B0100000 => Instruction::SRAW(self),
+                        _ => panic!(),
+                    },
                     Op32_Funct3::ADDW_SUBW => match self.funct7 {
                         Funct7::B0000000 => Instruction::ADDW(self),
                         Funct7::B0100000 => Instruction::SUBW(self),

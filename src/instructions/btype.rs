@@ -2,10 +2,7 @@ use std::fmt::Display;
 
 use quark::Signs;
 
-use crate::{
-    cpu::{Core, Register},
-    pipeline::Stage,
-};
+use crate::{cpu::Register, pipeline::Stage};
 
 use super::{
     functions::BRANCH_Funct3, opcodes::MajorOpcode, FormatDecoder, ImmediateDecoder, Instruction,
@@ -60,7 +57,6 @@ impl Instruction<Btype> {
                 match rs1v == rs2v {
                     false => {
                         let se_offs = (args.imm12 as i64).sign_extend(64 - 12);
-                        //println!("BNE: se_offs: {:#x?}", se_offs);
                         let target = (core.prev_pc as i64).wrapping_add(se_offs) as u64;
                         core.set_pc(target)
                     }

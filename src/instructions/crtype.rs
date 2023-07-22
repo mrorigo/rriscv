@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    cpu::{Core, Register, Xlen},
+    cpu::{Register, Xlen},
     pipeline::Stage,
 };
 
@@ -46,6 +46,14 @@ impl Instruction<CRtype> {
                 let value = core.bit_extend(rs1v.wrapping_add(rs2v) as i64) as u64;
                 Stage::writeback(args.rs1_rd, value)
             },
+        }
+    }
+
+    pub fn C_EBREAK(args: &CRtype) -> Instruction<CRtype> {
+        Instruction {
+            mnemonic: &"C.EBREAK",
+            args: Some(*args),
+            funct: |_core, _args| Stage::TRAP(crate::cpu::TrapCause::Breakpoint),
         }
     }
 
@@ -110,7 +118,7 @@ impl InstructionSelector<CRtype> for CRtype {
                     // C.EBREAK / C.JALR / C.ADD
                     1 => match self.rs2 {
                         0 => match self.rs1_rd {
-                            0 => todo!("C.EBREAK"),
+                            0 => Instruction::C_EBREAK(self), //todo!("C.EBREAK"),
                             _ => Instruction::C_JALR(self),
                         },
                         _ => Instruction::C_ADD(self),
