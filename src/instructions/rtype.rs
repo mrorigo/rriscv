@@ -101,7 +101,7 @@ impl InstructionSelector<Rtype> for Rtype {
 }
 impl InstructionExcecutor for Instruction<Rtype> {
     fn run(&self, core: &mut Core) -> Stage {
-        debug_trace!(println!("{}", self.to_string()));
+        instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }

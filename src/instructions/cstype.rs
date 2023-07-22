@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    cpu::{Core, Register},
+    cpu::{Core, Register, Xlen},
     pipeline::{MemoryAccess, Stage, WritebackStage},
 };
 
@@ -119,9 +119,9 @@ impl Instruction<CStype> {
             args: Some(*args),
             mnemonic: &"C.SD",
             funct: |core, args| {
-                let rs1v = core.read_register(args.rs1_rd);
+                let rs1v = core.read_register(args.rs1_rd) as i64;
                 let rs2v = core.read_register(args.rs2);
-                let addr = rs1v + (args.offset as u64);
+                let addr = (rs1v + (args.offset as i32 as i64)) as u64;
 
                 Stage::MEMORY(MemoryAccess::WRITE64(addr, rs2v))
             },
@@ -130,7 +130,7 @@ impl Instruction<CStype> {
 }
 
 impl InstructionSelector<CStype> for CStype {
-    fn select(&self, _xlen: crate::cpu::Xlen) -> Instruction<CStype> {
+    fn select(&self, _xlen: Xlen) -> Instruction<CStype> {
         match self.opcode {
             CompressedOpcode::C0 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                 C0_Funct3::C_SD => Instruction::C_SD(self),
@@ -156,7 +156,7 @@ impl InstructionSelector<CStype> for CStype {
 
 impl InstructionExcecutor for Instruction<CStype> {
     fn run(&self, core: &mut Core) -> Stage {
-        debug_trace!(println!("{}", self.to_string()));
+        instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }

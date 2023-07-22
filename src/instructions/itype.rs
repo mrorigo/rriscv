@@ -3,12 +3,12 @@ use std::fmt::Display;
 use quark::Signs;
 
 use crate::{
-    cpu::{Core, Register, Xlen},
+    cpu::{CSRRegister, Core, Register, Xlen},
     pipeline::{Stage, WritebackStage},
 };
 
 use super::{
-    functions::{CSR_Funct3, Load_Funct3, OpImm32_Funct3, OpImm_Funct3},
+    functions::{CSR_Funct3, Load_Funct3, MiscMem_Funct3, OpImm32_Funct3, OpImm_Funct3},
     opcodes::MajorOpcode,
     FormatDecoder, Instruction, InstructionExcecutor, InstructionFormatType, InstructionSelector,
 };
@@ -104,7 +104,7 @@ impl Instruction<Itype> {
                 let rs1v = core.read_register(args.rs1) as i64;
                 let seimm = (args.imm12 as u64).sign_extend(64 - 12);
                 let value = core.bit_extend(rs1v.wrapping_add(seimm as i64)) as i32 as u64;
-                debug_trace!(println!(
+                instruction_trace!(println!(
                     "ADDIW x{}, x{}, {}  ; x{} = {:#x?}",
                     args.rd, args.rs1, seimm as i64, args.rd, value
                 ));
@@ -121,7 +121,7 @@ impl Instruction<Itype> {
                 let rs1v = core.read_register(args.rs1) as i64;
                 let seimm = (args.imm12 as u64).sign_extend(64 - 12);
                 let value = core.bit_extend(rs1v | seimm as i64) as u64;
-                debug_trace!(println!(
+                instruction_trace!(println!(
                     "ORI x{}, x{}, {:#x?}  ; x{} = {:#x?}",
                     args.rd, args.rs1, seimm as u64, args.rd, value
                 ));
@@ -192,12 +192,63 @@ impl Instruction<Itype> {
                 let se_imm12 = (args.imm12 as u64).sign_extend(64 - 12) as i64;
                 let rs1v = core.read_register(args.rs1);
                 let addr = (rs1v as i64 + se_imm12) as u64;
-                debug_trace!(println!(
+                instruction_trace!(println!(
                     "LD: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
                     rs1v, se_imm12, addr
                 ));
                 Stage::MEMORY(crate::pipeline::MemoryAccess::READ64(addr, args.rd))
             },
+        }
+    }
+
+    pub fn LW(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"LW",
+            args: Some(*args),
+            funct: |core, args| {
+                let se_imm12 = (args.imm12 as u64).sign_extend(64 - 12) as i64;
+                let rs1v = core.read_register(args.rs1);
+                let addr = (rs1v as i64 + se_imm12) as u64;
+                instruction_trace!(println!(
+                    "LD: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
+                    rs1v, se_imm12, addr
+                ));
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ64(addr, args.rd))
+            },
+        }
+    }
+
+    pub fn MRET(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: "MRET",
+            args: Some(*args),
+            funct: |core, args| {
+                core.set_pc(core.read_csr(CSRRegister::mepc));
+
+                let status = core.read_csr(CSRRegister::mstatus);
+                let mpie = (status >> 7) & 1;
+                let mpp = (status >> 11) & 3;
+                let mprv = match core.pmode() {
+                    crate::cpu::PrivMode::Machine => (status >> 17) & 1,
+                    _ => 0,
+                };
+                // Write MPIE[7] to MIE[3], set MPIE[7] to 1, set MPP[12:11] to 0 and write 1 to MPRV[17]
+                let new_status = (status & !0x21888) | (mprv << 17) | (mpie << 3) | (1 << 7);
+                core.write_csr(CSRRegister::mstatus, new_status);
+
+                // mpp is the privilege level the CPU was in prior to trapping to machine privilege mode
+                core.set_pmode(num::FromPrimitive::from_u8(mpp as u8).unwrap());
+
+                Stage::WRITEBACK(None)
+            },
+        }
+    }
+
+    pub fn FENCE(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: "FENCE",
+            args: Some(*args),
+            funct: |_core, _args| Stage::WRITEBACK(None),
         }
     }
 }
@@ -229,7 +280,12 @@ impl InstructionSelector<Itype> for Itype {
             MajorOpcode::SYSTEM => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
                 CSR_Funct3::CSRRS => Instruction::CSRRS(self),
                 CSR_Funct3::CSRRW => Instruction::CSRRW(self),
-                _ => panic!(),
+                CSR_Funct3::ECALL_EBREAK_MRET => match self.imm12 {
+                    0 => todo!("ECALL"),
+                    1 => todo!("EBREAK"),
+                    _ => Instruction::MRET(self),
+                },
+                _ => panic!("Unknown SYSTEM instruction"),
             },
             MajorOpcode::JALR => Instruction::JALR(self),
             MajorOpcode::OP_IMM_32 => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
@@ -239,6 +295,12 @@ impl InstructionSelector<Itype> for Itype {
             },
             MajorOpcode::LOAD => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
                 Load_Funct3::LD => Instruction::LD(self),
+                Load_Funct3::LW => Instruction::LW(self),
+                _ => panic!(),
+            },
+            MajorOpcode::MISC_MEM => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
+                MiscMem_Funct3::FENCE => Instruction::FENCE(self),
+                MiscMem_Funct3::FENCE_I => todo!(),
                 _ => panic!(),
             },
             _ => panic!(),
@@ -248,7 +310,7 @@ impl InstructionSelector<Itype> for Itype {
 
 impl InstructionExcecutor for Instruction<Itype> {
     fn run(&self, core: &mut Core) -> Stage {
-        debug_trace!(println!("{}", self.to_string()));
+        instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }

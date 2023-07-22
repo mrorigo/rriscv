@@ -20,6 +20,7 @@ pub struct CItype {
     pub rs1_rd: Register,
     pub imm: u16,
     pub funct3: Funct3,
+    pub word: u16, // @FIXME: We need the original word here for ADDI16SP, which has a different immediate format
 }
 
 impl CompressedFormatType for CItype {}
@@ -31,11 +32,14 @@ impl CompressedFormatDecoder<CItype> for CItype {
             rs1_rd: ((word >> 7) & 31) as u8,
             imm: CItype::decode_immediate(word as u16),
             funct3: num::FromPrimitive::from_u8(((word >> 13) & 0x7) as u8).unwrap(),
+            word: word,
         }
     }
 }
 
 impl ImmediateDecoder<u16, u16> for CItype {
+    // @FIXME: This only decodes the C.LUI-type immediate, there is also the C.ADDI16SP format,
+    //         that we decode in the instruction itself for now.
     fn decode_immediate(i: u16) -> u16 {
         let nzimm1612 = (i >> 2) & 31;
         let nzimm17 = (i >> 12) & 1;
@@ -45,16 +49,41 @@ impl ImmediateDecoder<u16, u16> for CItype {
 
 #[allow(non_snake_case)]
 impl Instruction<CItype> {
+    fn C_ADDI16SP(args: &CItype) -> Instruction<CItype> {
+        Instruction {
+            mnemonic: "C.ADDI16SP",
+            args: Some(*args),
+            funct: |core, args| {
+                let imm = (match args.word & 0x1000 {
+                    0x1000 => 0xfc00,
+                    _ => 0,
+                }) | ((args.word >> 3) & 0x200)
+                    | ((args.word >> 2) & 0x10)
+                    | ((args.word << 1) & 0x40)
+                    | ((args.word << 4) & 0x180)
+                    | ((args.word << 3) & 0x20);
+
+                let sp = core.read_register(2) as i64;
+                let value = sp.wrapping_add(imm as i32 as i64) as u64;
+                // instruction_trace!(println!(
+                //     "C.ADDI16SP x{}, {:#x?} ; x{} = {:#x?}",
+                //     args.rs1_rd, se_imm, args.rs1_rd, value
+                // ));
+                Stage::writeback(args.rs1_rd, value)
+            },
+        }
+    }
+
     fn C_LUI(args: &CItype) -> Instruction<CItype> {
         Instruction {
             mnemonic: "C.LUI",
             args: Some(*args),
             funct: |core, args| {
-                let value = (args.imm as u64) << 12;
-                debug_trace!(println!(
-                    "C.LUI x{}, {:#x?} ; x{} = {:#x?}",
-                    args.rs1_rd, args.imm, args.rs1_rd, value
-                ));
+                let value = ((args.imm as u64) << 12) as u32 as u64;
+                // instruction_trace!(println!(
+                //     "C.LUI x{}, {:#x?} ; x{} = {:#x?}",
+                //     args.rs1_rd, args.imm, args.rs1_rd, value
+                // ));
                 Stage::writeback(args.rs1_rd, value)
             },
         }
@@ -99,7 +128,7 @@ impl Instruction<CItype> {
                 let ze_imm = args.imm as u64;
                 let sp = core.read_register(2);
                 let addr = sp + (ze_imm << 3);
-                debug_trace!(println!(
+                instruction_trace!(println!(
                     "C.LDSP: sp={:#x?} ze_imm={:#x?} addr={:#x?}",
                     sp, ze_imm, addr
                 ));
@@ -127,7 +156,7 @@ impl Instruction<CItype> {
                 let rs1v = core.read_register(args.rs1_rd) as i64;
                 let seimm = (args.imm as u64).sign_extend(64 - 6);
                 let value = core.bit_extend(rs1v.wrapping_add(seimm as i64)) as i32 as u64;
-                debug_trace!(println!(
+                instruction_trace!(println!(
                     "C.ADDIW x{}, {}  ; x{} = {:#x?}",
                     args.rs1_rd, seimm as i64, args.rs1_rd, value
                 ));
@@ -152,7 +181,11 @@ impl InstructionSelector<CItype> for CItype {
     fn select(&self, _xlen: Xlen) -> Instruction<CItype> {
         match self.opcode {
             CompressedOpcode::C1 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
-                C1_Funct3::C_LUI => Instruction::C_LUI(self),
+                C1_Funct3::C_LUI => match self.rs1_rd {
+                    2 => Instruction::C_ADDI16SP(self),
+                    0 => panic!(),
+                    _ => Instruction::C_LUI(self),
+                },
                 C1_Funct3::C_ADDI => Instruction::C_ADDI(self),
                 C1_Funct3::C_LI => Instruction::C_LI(self),
                 C1_Funct3::C_ADDIW => Instruction::C_ADDIW(self),
@@ -170,7 +203,7 @@ impl InstructionSelector<CItype> for CItype {
 
 impl InstructionExcecutor for Instruction<CItype> {
     fn run(&self, core: &mut Core) -> Stage {
-        debug_trace!(println!("{}", self.to_string()));
+        instruction_trace!(println!("EXEC: {}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }

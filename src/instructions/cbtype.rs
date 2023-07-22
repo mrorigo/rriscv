@@ -1,11 +1,17 @@
+use std::fmt::Display;
+
+use quark::Signs;
+
 use crate::{
     cpu::{Core, Register},
     pipeline::Stage,
 };
 
 use super::{
-    opcodes::CompressedOpcode, CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder,
-    Instruction, InstructionExcecutor, InstructionSelector,
+    functions::{C1_Funct3, Funct3},
+    opcodes::CompressedOpcode,
+    CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder, Instruction,
+    InstructionExcecutor, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -13,7 +19,7 @@ pub struct CBtype {
     pub opcode: CompressedOpcode,
     pub rs1: Register,
     pub offset: u16,
-    pub funct3: u8,
+    pub funct3: Funct3,
 }
 
 impl CompressedFormatType for CBtype {}
@@ -29,15 +35,73 @@ impl CompressedFormatDecoder<CBtype> for CBtype {
     }
 }
 
+// CB format
+// +-------+-------------+------+-----------------+-------+
+// 15    13|12         10|9    7|6               2|1     0|
+// +-------+-------------+------+-----------------+-------+
+// |funct3 |    imm      | rs1' |      imm        |  op   |
+// +-------+-------------+------+-----------------+-------+
+// |   3   |     3       |  3   |        5        |   2   |
+// |C.BEQZ | offs[8|4:3] | src  | offs[7:6|2:1|5] |   C1  |
+// |C.BNEZ | offs[8|4:3] | src  | offs[7:6|2:1|5] |   C1  |
+// +-------+-------------+------+-----------------+-------+
+
 impl ImmediateDecoder<u16, u16> for CBtype {
-    fn decode_immediate(_i: u16) -> u16 {
-        todo!()
+    fn decode_immediate(halfword: u16) -> u16 {
+        (match halfword & 0x1000 {
+            0x1000 => 0xfe00,
+            _ => 0,
+        }) | ((halfword >> 4) & 0x100)
+            | ((halfword >> 7) & 0x18)
+            | ((halfword << 1) & 0xc0)
+            | ((halfword >> 2) & 0x6)
+            | ((halfword << 3) & 0x20)
     }
 }
 
-impl InstructionSelector<CBtype> for CBtype {}
+impl Display for Instruction<CBtype> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.args.is_some() {
+            write!(f, "{}", self.mnemonic)
+        } else {
+            let args = self.args.unwrap();
+            write!(f, "{} x{},{:#x?}", self.mnemonic, args.rs1, args.offset)
+        }
+    }
+}
+
+#[allow(non_snake_case)]
+impl Instruction<CBtype> {
+    /// C.BEQZ takes the branch if the value in register rs1 is zero.
+    pub fn C_BEQZ(args: &CBtype) -> Instruction<CBtype> {
+        Instruction {
+            args: Some(*args),
+            mnemonic: "C.BEQZ",
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1);
+                if rs1v == 0 {
+                    core.set_pc((args.offset.sign_extend(64 - 9) as i64 + core.pc() as i64) as u64)
+                }
+                Stage::WRITEBACK(None)
+            },
+        }
+    }
+}
+
+impl InstructionSelector<CBtype> for CBtype {
+    fn select(&self, _xlen: crate::cpu::Xlen) -> Instruction<CBtype> {
+        match self.opcode {
+            CompressedOpcode::C1 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
+                C1_Funct3::C_BEQZ => Instruction::C_BEQZ(self),
+                _ => todo!(),
+            },
+            _ => panic!(),
+        }
+    }
+}
 impl InstructionExcecutor for Instruction<CBtype> {
     fn run(&self, core: &mut Core) -> Stage {
+        instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }

@@ -27,6 +27,16 @@ pub enum C0_Funct3 {
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, FromPrimitive)]
 #[repr(u8)]
+pub enum Store_Funct3 {
+    SB = 0b000,
+    SH = 0b001,
+    SW = 0b010,
+    SD = 0b011,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, FromPrimitive)]
+#[repr(u8)]
 pub enum OpImm_Funct3 {
     ADDI = 0b000,
     SLLI = 0b001,
@@ -49,6 +59,14 @@ pub enum OpImm32_Funct3 {
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, FromPrimitive)]
 #[repr(u8)]
+pub enum MiscMem_Funct3 {
+    FENCE = 0b000,
+    FENCE_I = 0b001,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, FromPrimitive)]
+#[repr(u8)]
 pub enum Load_Funct3 {
     LB = 0x000,
     LH = 0b001,
@@ -61,6 +79,7 @@ pub enum Load_Funct3 {
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, FromPrimitive)]
 pub enum CSR_Funct3 {
+    ECALL_EBREAK_MRET = 0b000,
     CSRRW = 0b001,
     CSRRS = 0b010,
     CSRRC = 0b011,
@@ -89,6 +108,8 @@ pub enum C1_Funct3 {
     C_ADDIW = 0b001,
     C_LI = 0b010,
     C_LUI = 0b011, // ADDI16SP shares the opcode
+    C_BEQZ = 0b110,
+    C_BNEZ = 0b111,
 }
 
 #[allow(non_camel_case_types)]

@@ -111,6 +111,7 @@ impl InstructionSelector<CRtype> for CRtype {
 
 impl InstructionExcecutor for Instruction<CRtype> {
     fn run(&self, core: &mut Core) -> Stage {
+        instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }

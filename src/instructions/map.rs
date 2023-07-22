@@ -9,7 +9,7 @@ pub const COMPRESSED_FORMAT_MAP: [CompressedFormat; 32] = [
     CompressedFormat::CI,
     CompressedFormat::Unknown,
     CompressedFormat::Unknown,
-    CompressedFormat::Unknown,
+    CompressedFormat::CL,      // C.LW
     CompressedFormat::CI,      // C.LI
     CompressedFormat::Unknown, // 10
     CompressedFormat::Unknown,
@@ -26,7 +26,7 @@ pub const COMPRESSED_FORMAT_MAP: [CompressedFormat; 32] = [
     CompressedFormat::Unknown,
     CompressedFormat::Unknown,
     CompressedFormat::Unknown,
-    CompressedFormat::Unknown,
+    CompressedFormat::CB,
     CompressedFormat::Unknown,
     CompressedFormat::Unknown,
     CompressedFormat::CS,
@@ -58,7 +58,7 @@ pub const FORMAT_MAP: [InstructionFormat; 128] = [
     InstructionFormat::Unknown, /*0001100 */
     InstructionFormat::Unknown, /*0001101 */
     InstructionFormat::Unknown, /*0001110 */
-    InstructionFormat::Unknown, /*0001111 */
+    InstructionFormat::I,       /*0001111 = 0xf = FENCE*/
     InstructionFormat::Unknown, /*0010000 */
     InstructionFormat::Unknown, /*0010001 */
     InstructionFormat::Unknown, /*0010010 */

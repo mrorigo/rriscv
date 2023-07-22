@@ -71,7 +71,7 @@ impl InstructionSelector<CIWtype> for CIWtype {
 }
 impl InstructionExcecutor for Instruction<CIWtype> {
     fn run(&self, core: &mut Core) -> Stage {
-        debug_trace!(println!("{}", self.to_string()));
+        instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }

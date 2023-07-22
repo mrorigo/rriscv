@@ -52,7 +52,7 @@ impl Instruction<CSStype> {
                 let sp = core.read_register(2);
                 let addr = sp + (args.uimm as u64);
                 let rs2v = core.read_register(args.rs2);
-                debug_trace!(println!(
+                instruction_trace!(println!(
                     "C.SDSP: args.uimm={:#x?}  rs2v: {:#x?}  sp={:#x?}  addr={:#x?}",
                     args.uimm, rs2v, sp, addr
                 ));

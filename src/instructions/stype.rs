@@ -1,11 +1,11 @@
 use crate::{
-    cpu::{Core, Register},
-    pipeline::Stage,
+    cpu::{Core, Register, Xlen},
+    pipeline::{MemoryAccess, Stage},
 };
 
 use super::{
-    opcodes::MajorOpcode, FormatDecoder, ImmediateDecoder, Instruction, InstructionExcecutor,
-    InstructionFormatType, InstructionSelector,
+    functions::Store_Funct3, opcodes::MajorOpcode, FormatDecoder, ImmediateDecoder, Instruction,
+    InstructionExcecutor, InstructionFormatType, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -38,8 +38,39 @@ impl ImmediateDecoder<u32, u16> for Stype {
         imm12 | imm5 as u16
     }
 }
+#[allow(non_snake_case)]
 
-impl InstructionSelector<Stype> for Stype {}
+impl Instruction<Stype> {
+    pub fn SD(args: &Stype) -> Instruction<Stype> {
+        Instruction {
+            mnemonic: "SD",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1);
+                let rs2v = core.read_register(args.rs2);
+
+                // The effective byte address is obtained by adding register rs1 to the sign-extended 12-bit offset
+                let addr = rs1v + (args.imm12 as u64);
+
+                Stage::MEMORY(MemoryAccess::WRITE64(addr, rs2v))
+            },
+        }
+    }
+}
+
+impl InstructionSelector<Stype> for Stype {
+    fn select(&self, _xlen: Xlen) -> Instruction<Stype> {
+        match self.opcode {
+            MajorOpcode::STORE => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
+                Store_Funct3::SD => Instruction::SD(self),
+                Store_Funct3::SB => todo!(),
+                Store_Funct3::SH => todo!(),
+                Store_Funct3::SW => todo!(),
+            },
+            _ => panic!(),
+        }
+    }
+}
 
 impl InstructionExcecutor for Instruction<Stype> {
     fn run(&self, core: &mut Core) -> Stage {

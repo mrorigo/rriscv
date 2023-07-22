@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use quark::Signs;
+
 use crate::{
     cpu::{Core, Register, Xlen},
     pipeline::{Stage, WritebackStage},
@@ -41,20 +43,23 @@ impl Display for Instruction<Utype> {
 }
 
 impl Instruction<Utype> {
+    /// AUIPC forms a 32-bit offset from the 20-bit U-immediate, filling in the lowest 12 bits with
+    /// zeros, adds this offset to the pc, then places the result in register rd
     #[allow(non_snake_case)]
     pub fn AUIPC(utype: &Utype) -> Instruction<Utype> {
         Instruction {
             mnemonic: "AUIPC",
             args: Some(*utype),
             funct: |core, args| {
-                const M: u32 = 1 << (20 - 1);
-                let se_imm20 = (args.imm20 ^ M) - M;
-                let value = ((se_imm20 << 12) as u64).wrapping_add(core.prev_pc);
-                debug_trace!(println!(
-                    "AUIPC x{}, {:#x?}\t; x{}={:#x?}",
-                    args.rd, args.imm20, args.rd, value
+                let se_imm20 = (args.imm20.sign_extend(32 - 20));
+                // const M: u32 = 1 << (20 - 1);
+                // let se_imm20 = (args.imm20 ^ M) - M;
+                let value = core.prev_pc.wrapping_add((se_imm20 << 12) as u64) as u32;
+                instruction_trace!(println!(
+                    "AUIPC x{}, {:#x?}\t; pc={:#x?} x{}={:#x?}",
+                    args.rd, se_imm20, core.prev_pc, args.rd, value
                 ));
-                Stage::writeback(args.rd, value)
+                Stage::writeback(args.rd, value as u64)
             },
         }
     }
@@ -84,7 +89,7 @@ impl InstructionSelector<Utype> for Utype {
 
 impl InstructionExcecutor for Instruction<Utype> {
     fn run(&self, core: &mut Core) -> Stage {
-        debug_trace!(println!("{}", self.to_string()));
+        instruction_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }

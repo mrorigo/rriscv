@@ -55,7 +55,10 @@ impl InstructionDecoder for Core<'_> {
                     InstructionFormat::B => DecodedInstruction::B(Btype::decode(word)),
                     InstructionFormat::I => DecodedInstruction::I(Itype::decode(word)),
                     InstructionFormat::J => DecodedInstruction::J(Jtype::decode(word)),
-                    _ => panic!("invalid format {:?}", FORMAT_MAP[opcode_idx]),
+                    _ => panic!(
+                        "invalid format {:?} ({})",
+                        FORMAT_MAP[opcode_idx], opcode_idx
+                    ),
                 }
             }
 

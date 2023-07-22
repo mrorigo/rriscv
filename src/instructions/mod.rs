@@ -3,9 +3,9 @@ use crate::{
     pipeline::Stage,
 };
 
-macro_rules! debug_trace {
+macro_rules! instruction_trace {
     ($instr:expr) => {
-        print!("DEBUG_TRACE: ");
+        print!("INSTRUCTION: ");
         $instr;
     };
 }
