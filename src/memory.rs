@@ -49,7 +49,13 @@ pub trait RAMOperations<T>: MemoryOperations<T, u8> {
 
 impl MemoryOperations<RAM, u8> for RAM {
     fn write8(&mut self, addr: VAddr, value: u8) -> bool {
+        debug_assert!(addr >= self.base_address);
+        debug_assert!(addr < self.size.checked_add(self.base_address as usize).unwrap() as u64);
+
         let offs = addr - self.base_address;
+        if addr >= 0x80000000 && addr < 0x80002200 {
+            println!("w8 {:#x?} @ {:#x?}", value, addr);
+        }
         unsafe { ptr::write(self.data.offset(offs as isize), (value & 0xff) as u8) }
         true
     }
@@ -60,7 +66,13 @@ impl MemoryOperations<RAM, u8> for RAM {
         debug_assert!(addr < self.size.checked_add(self.base_address as usize).unwrap() as u64);
         let offs = addr - self.base_address;
 
-        unsafe { Some(ptr::read(self.data.offset(offs as isize)) as u8) }
+        let value = unsafe { ptr::read(self.data.offset(offs as isize)) as u8 };
+
+        // if addr <= 0x80002228 && addr > 0x80000000 {
+        //     println!("r8 {:#x?} @ {:#x?}", value, addr);
+        // }
+
+        Some(value)
     }
 
     fn read32(&self, addr: VAddr) -> Option<u32> {
@@ -72,6 +84,9 @@ impl MemoryOperations<RAM, u8> for RAM {
                 Some(ptr::read(self.data.offset(i + offs as isize)) as u8).unwrap() as u32
             };
             data |= b << (i * 8)
+        }
+        if addr <= 0x80002228 && addr > 0x80002200 {
+            println!("r32 {:#x?} => {:#x?}", addr, data);
         }
         Some(data)
     }
@@ -94,11 +109,11 @@ impl RAM {
                 data.offset(i as isize).write(0);
             }
         }
-        for i in (0..size >> 2).step_by(4) {
-            unsafe {
-                assert!(data.offset(i as isize).read() == 0);
-            }
-        }
+        // for i in (0..size >> 2).step_by(4) {
+        //     unsafe {
+        //         assert!(data.offset(i as isize).read() == 0);
+        //     }
+        // }
         RAM {
             base_address,
             size,

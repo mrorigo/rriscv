@@ -51,14 +51,14 @@ impl Instruction<CLtype> {
             mnemonic: "C.LW",
             args: Some(*args),
             funct: |core, args| {
-                let rs1v = core.read_register(args.rs1);
-                let addr = rs1v + args.imm as u64;
+                let rs1v = core.read_register(args.rs1) as i64;
+                let addr = rs1v.wrapping_add(args.imm as i64) as u64;
                 instruction_trace!(println!(
-                    "C.LW: rs1v={:#x?} se_imm12={:#x?} addr={:#x?}",
-                    rs1v, args.rs1, addr
+                    "C.LW: rs1v={:#x?} imm={:#x?} addr={:#x?}",
+                    rs1v, args.imm, addr
                 ));
                 instruction_trace!(println!("C.LW x{}, {}(x{})", args.rd, args.imm, args.rs1));
-                Stage::MEMORY(crate::pipeline::MemoryAccess::READ32(addr, args.rd, false))
+                Stage::MEMORY(crate::pipeline::MemoryAccess::READ32(addr, args.rd, true))
             },
         }
     }

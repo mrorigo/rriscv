@@ -4,6 +4,7 @@ use include_bytes_aligned::include_bytes_aligned;
 use crate::{
     memory::{MemoryOperations, RAMOperations},
     mmio::{PhysicalMemory, VirtualDevice, CLINT, PLIC, UART, VIRTIO},
+    pipeline::MemoryAccess,
 };
 
 #[derive(Copy, Clone, Debug)]
@@ -37,6 +38,7 @@ pub struct MMU {
     plic: PLIC,
     clint: CLINT,
     virtio: VIRTIO,
+    protected: Vec<MemoryRange>,
 
     device_table: Vec<MemoryRange>,
 }
@@ -62,6 +64,11 @@ impl MemoryOperations<MMU, u8> for MMU {
 
     // @TODO: Optimize this?
     fn write8(&mut self, addr: VAddr, value: u8) -> bool {
+        for i in 0..self.protected.len() {
+            if self.protected[i].includes(addr) {
+                panic!();
+            }
+        }
         if self.memory.includes(addr) {
             self.memory.write8(addr, value)
         } else if self.uart.includes(addr) {
@@ -81,8 +88,10 @@ impl MemoryOperations<MMU, u8> for MMU {
     fn read32(&self, addr: VAddr) -> Option<u32> {
         if self.memory.includes(addr) {
             self.memory.read32(addr)
+        } else if self.clint.includes(addr) {
+            self.clint.read32(addr)
         } else {
-            panic!("write32 only supported for RAM memory")
+            panic!("read32 only supported for RAM memory, tried {:#x?}", addr)
         }
     }
 
@@ -121,12 +130,18 @@ impl MMU {
             plic,
             clint,
             virtio,
+            protected: Vec::new(),
             device_table,
         }
     }
 
     pub fn tick(&mut self) {
         self.uart.tick();
+        self.clint.tick();
+    }
+
+    pub fn protect_range(&mut self, range: MemoryRange) {
+        self.protected.push(range);
     }
 
     fn parse_dtb() -> Vec<MemoryRange> {

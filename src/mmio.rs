@@ -131,7 +131,7 @@ impl VirtualDevice for UART {
             0 => match lcr == 0 {
                 true => {
                     state.thr = value;
-                    eprintln!("UART out @ {:#x?}: {}", offs, value);
+                    //eprintln!("UART out @ {:#x?}: {}", offs, value);
                     UART::update_iir(false, &mut state);
                     state.lsr &= !LSR_TX_IDLE;
                 }
@@ -235,9 +235,35 @@ impl PhysicalMemory {
 }
 
 impl CLINT {
+    pub const CLINT_MTIME: usize = 0xbff8;
+
     pub fn create(range: MemoryRange) -> CLINT {
         let ram = RAM::create(range.start, (range.end - range.start).try_into().unwrap());
         CLINT { range, ram }
+    }
+
+    pub fn tick(&mut self) {
+        let h = self
+            .read32(CLINT::CLINT_MTIME as VAddr + self.range.start)
+            .unwrap();
+        let l = self
+            .read32(CLINT::CLINT_MTIME as VAddr + 4 + self.range.start)
+            .unwrap();
+
+        if l.wrapping_add(1) < l {
+            self.write32(
+                CLINT::CLINT_MTIME as VAddr + 4 + self.range.start,
+                h.wrapping_add(1),
+            );
+        }
+        //println!("CLINT:MTIME: {:#?} / {:#?}", l, h);
+
+        // self.write32(
+        //     CLINT::CLINT_MTIME as VAddr + self.range.start,
+        //     l.wrapping_add(1),
+        // );
+
+        // Update CLINT_MTIME
     }
 }
 
@@ -336,7 +362,7 @@ impl MemoryOperations<CLINT, u8> for CLINT {
     }
 
     fn read32(&self, addr: VAddr) -> Option<u32> {
-        todo!()
+        self.ram.read32(addr)
     }
 
     fn write32(&mut self, addr: VAddr, value: u32) {

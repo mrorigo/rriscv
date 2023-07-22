@@ -28,7 +28,7 @@ pub const FORMAT_MAP: [InstructionFormat; 128] = [
     InstructionFormat::Unknown, /*0011000 */
     InstructionFormat::Unknown, /*0011001 */
     InstructionFormat::Unknown, /*0011010 */
-    InstructionFormat::I,       /*0011011 = 0x1b = ADDIW */
+    InstructionFormat::I,       /*0011011 = 0x1b = ADDIW/SRAIW/SRLIW */
     InstructionFormat::Unknown, /*0011100 */
     InstructionFormat::Unknown, /*0011101 */
     InstructionFormat::Unknown, /*0011110 */

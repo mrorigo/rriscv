@@ -51,10 +51,10 @@ impl ElfLoader for Loader<'_> {
     fn load(&mut self, _flags: Flags, base: VAddr, region: &[u8]) -> Result<(), ElfLoaderErr> {
         let start = base;
         let end = base + region.len() as u64;
-        // println!(
-        //     "ELF load: base={:#x} region into = {:#x} -- {:#x}  vbase: {:#x}",
-        //     base, start, end, self.vbase
-        // );
+        println!(
+            "ELF load: base={:#x} region into = {:#x} -- {:#x}  vbase: {:#x}",
+            base, start, end, self.vbase
+        );
         for offs in (0..region.len()).step_by(1) {
             self.memory.write8(offs as u64 + start as u64, region[offs]);
         }

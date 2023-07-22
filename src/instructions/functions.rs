@@ -92,7 +92,7 @@ pub enum Op_Funct3 {
 pub enum OpImm32_Funct3 {
     ADDIW = 0b000,
     SLLIW = 0b001,
-    SRLIW = 0b101,
+    SRLIW_SRAIW = 0b101,
 }
 
 #[allow(non_camel_case_types)]
@@ -101,6 +101,7 @@ pub enum OpImm32_Funct3 {
 pub enum Op32_Funct3 {
     ADDW_SUBW = 0b000,
     SLLW = 0b001,
+    SRLW = 0b101,
 }
 
 #[allow(non_camel_case_types)]

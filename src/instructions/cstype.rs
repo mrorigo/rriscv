@@ -33,7 +33,9 @@ impl CompressedFormatType for CStype {}
 
 impl ImmediateDecoder<u16, u8> for CStype {
     fn decode_immediate(i: u16) -> u8 {
-        (((i >> 7) & 0x38) | ((i << 1) & 0xc0)) as u8
+        (((i >> 7) & 0x38) | ((i << 1) & 0x40) | ((i >> 4) & 0x4)) as u8
+
+        //        (((i >> 7) & 0x38) | ((i << 1) & 0xc0)) as u8
     }
 }
 
@@ -138,6 +140,10 @@ impl Instruction<CStype> {
                 let rs1v = core.read_register(args.rs1_rd);
                 let rs2v = core.read_register(args.rs2);
                 let addr = (rs1v + args.offset as u64) as VAddr;
+                instruction_trace!(println!(
+                    "C.SW: rs1v={:#x?} rs2v={:#x?} offs={:#x?} addr={:#x?}",
+                    rs1v, rs2v, args.offset, addr
+                ));
 
                 Stage::MEMORY(MemoryAccess::WRITE32(addr, rs2v as u32))
             },

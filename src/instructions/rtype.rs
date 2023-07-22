@@ -84,6 +84,19 @@ impl Instruction<Rtype> {
         }
     }
 
+    pub fn SRL(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"SRL",
+            args: Some(*args),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1);
+                let r2v = core.read_register(args.rs2);
+                let value = r1v.wrapping_shr(r2v as u32) as i64 as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
     pub fn OR(args: &Rtype) -> Instruction<Rtype> {
         Instruction {
             mnemonic: &"OR",
@@ -180,6 +193,19 @@ impl Instruction<Rtype> {
                 let r1v = core.read_register(args.rs1) as i32;
                 let r2v = core.read_register(args.rs2) as i32;
                 let value = core.bit_extend((r1v.wrapping_sub(r2v)) as i64) as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
+    pub fn ADDW(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"ADDW",
+            args: Some(*args),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1) as i32;
+                let r2v = core.read_register(args.rs2) as i32;
+                let value = core.bit_extend((r1v.wrapping_add(r2v)) as i64) as u64;
                 Stage::writeback(args.rd, value)
             },
         }
@@ -301,13 +327,10 @@ impl InstructionSelector<Rtype> for Rtype {
                     _ => Instruction::MUL(self),
                 },
                 _ => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
-                    Op32_Funct3::SLLW => match self.funct7 {
-                        Funct7::B0100000 => Instruction::SRLW(self),
-                        Funct7::B0000000 => Instruction::SLLW(self),
-                        _ => panic!(),
-                    },
+                    Op32_Funct3::SRLW => Instruction::SRLW(self),
+                    Op32_Funct3::SLLW => Instruction::SLLW(self),
                     Op32_Funct3::ADDW_SUBW => match self.funct7 {
-                        Funct7::B0000000 => todo!("ADDW"),
+                        Funct7::B0000000 => Instruction::ADDW(self),
                         Funct7::B0100000 => Instruction::SUBW(self),
                         _ => panic!(),
                     },
@@ -327,7 +350,7 @@ impl InstructionSelector<Rtype> for Rtype {
                 },
                 Funct7::B0000000 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                     Op_Funct3::ADD_SUB => Instruction::ADD(self),
-                    Op_Funct3::SRL_SRA => todo!("SRL, since Funct7=0"),
+                    Op_Funct3::SRL_SRA => Instruction::SRL(self),
                     Op_Funct3::AND => Instruction::AND(self),
                     Op_Funct3::OR => Instruction::OR(self),
                     Op_Funct3::XOR => Instruction::XOR(self),

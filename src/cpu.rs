@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::usize;
 
 use elfloader::VAddr;
 
@@ -33,7 +34,7 @@ pub enum TrapCause {
     IllegalInstruction = 0x02,
     Breakpoint = 0x03,
     LoadAddressMisaligned = 0x04,
-    LoadAccessFault = 0x05,
+    LoadAccessFault(VAddr) = 0x05,
 
     EnvCallFromUmode = 0x08,
     EnvCallFromSmode = 0x09,
@@ -215,16 +216,48 @@ impl Core {
         }
     }
 
+    pub fn debug_breakpoint(&self, cause: TrapCause) {
+        println!("EBREAK hit: HALTING!\n{:#x?}", cause);
+
+        let core = &self;
+        const STEP: usize = 4;
+        for i in (0..32).step_by(STEP) {
+            print!("x{}-{}:  ", i, i + (STEP - 1));
+            if i == 0 {
+                print!(" ");
+            }
+            if i < 10 {
+                print!(" ");
+            }
+            for reg in i..i + STEP {
+                print!("{:#020x?} ", core.read_register(reg as Register));
+            }
+            println!("");
+        }
+        println!(
+            "mstatus: {:#10x?}  sstatus: {:#10x?}\nmepc: {:#10x?}  pc: {:#10x?}",
+            core.read_csr(CSRRegister::mstatus),
+            core.read_csr(CSRRegister::sstatus),
+            core.read_csr(CSRRegister::mepc),
+            core.pc()
+        );
+        for i in 0..core.symboltrace.len() {
+            println!("{:x?}", core.symboltrace[i]);
+        }
+        panic!("EBREAK");
+    }
+
     pub fn set_pc(&mut self, pc: u64) {
         let symbol = self.find_closest_symbol(pc);
         let last_st = self.symboltrace.back();
         match symbol {
             Some(sym) => {
-                cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, sym.1));
+                // cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, sym.1));
                 match last_st {
                     Some((_last_addr, last_symbol)) => {
                         if sym.0 == pc && last_symbol.ne(&sym.1) {
                             //println!("Push symboltrace: {:?}@{:#x?}", sym.1, sym.0);
+                            cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, sym.1));
                             self.symboltrace.push_back((pc, sym.1));
                             if self.symboltrace.len() > 20 {
                                 self.symboltrace.pop_front();
@@ -316,7 +349,7 @@ impl Core {
                 self.csrs[reg as usize] = value;
             }
         }
-        cpu_trace!(println!("write_csr {:#x?} = {:#x?}", reg, value));
+        //cpu_trace!(println!("write_csr {:#x?} = {:#x?}", reg, value));
     }
 
     pub fn read_register(&self, reg: Register) -> RegisterValue {

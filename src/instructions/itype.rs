@@ -190,10 +190,19 @@ impl Instruction<Itype> {
                 let rs1v = core.read_register(args.rs1) as i64;
                 let seimm = (args.imm12 as u64).sign_extend(64 - 12);
                 let value = core.bit_extend(rs1v | seimm as i64) as u64;
-                // instruction_trace!(println!(
-                //     "ORI x{}, x{}, {:#x?}  ; x{} = {:#x?}",
-                //     args.rd, args.rs1, seimm as u64, args.rd, value
-                // ));
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
+    pub fn XORI(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"XORI",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1) as i64;
+                let seimm = (args.imm12 as u64).sign_extend(64 - 12);
+                let value = core.bit_extend(rs1v ^ seimm as i64) as u64;
                 Stage::writeback(args.rd, value)
             },
         }
@@ -211,7 +220,7 @@ impl Instruction<Itype> {
                 let se_imm12 = (args.imm12 as u64).sign_extend(64 - 12) as i32;
 
                 let rs1v = core.read_register(args.rs1);
-                let target = ((rs1v as i32 + se_imm12) as u32 & 0xffffffff) as u64;
+                let target = (((rs1v as i32).wrapping_add(se_imm12)) as u32 & 0xffffffff) as u64;
                 instruction_trace!(println!(
                     "JALR x{}={:#x?} target={:#x?}",
                     args.rs1, rs1v, target
@@ -258,11 +267,13 @@ impl Instruction<Itype> {
 
     pub fn SLTIU(args: &Itype) -> Instruction<Itype> {
         Instruction {
-            mnemonic: &"SLTI",
+            mnemonic: &"SLTIU",
             args: Some(*args),
             funct: |core, args| {
                 let rs1v = core.read_register(args.rs1) as u64;
-                let value = match rs1v < args.imm12 as u64 {
+                let imm = (args.imm12 as i64).sign_extend(64 - 12) as u64;
+                //println!("SLTIU imm: {:#x?} {:#x?}", args.imm12, imm);
+                let value = match rs1v < imm as u64 {
                     true => 1,
                     false => 0,
                 };
@@ -323,6 +334,27 @@ impl Instruction<Itype> {
         }
     }
 
+    pub fn SRAIW(args: &Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"SRAIW",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1) as i32;
+                // the shift amount is encoded in the lower 6 bits of the I-immediate field for RV64I.
+                let mask = match core.xlen {
+                    Xlen::Bits32 => 0x1f,
+                    Xlen::Bits64 => 0x3f,
+                };
+
+                let shamt = (args.imm12) & mask;
+                println!("SRAIW: shamt: {:?}", shamt);
+                //                let shamt = args.imm12 & 0b111111;
+                let value = ((rs1v as i32).wrapping_shr(shamt as u32)) as i32 as i64 as u64;
+                Stage::writeback(args.rd, value)
+            },
+        }
+    }
+
     pub fn SRLIW(args: &Itype) -> Instruction<Itype> {
         Instruction {
             mnemonic: &"SRLIW",
@@ -331,7 +363,7 @@ impl Instruction<Itype> {
                 let rs1v = core.read_register(args.rs1) as i32;
                 // the shift amount is encoded in the lower 6 bits of the I-immediate field for RV64I.
                 let shamt = args.imm12 & 0b111111;
-                let value = ((rs1v as i64) >> shamt) as i32 as u64;
+                let value = ((rs1v as u32) >> shamt) as i32 as i64 as u64;
                 Stage::writeback(args.rd, value)
             },
         }
@@ -460,34 +492,7 @@ impl Instruction<Itype> {
         Instruction {
             mnemonic: "EBREAK",
             args: Some(*args),
-            funct: |core, _args| {
-                println!("EBREAK hit: HALTING!");
-                const STEP: usize = 4;
-                for i in (0..32).step_by(STEP) {
-                    print!("x{}-{}:  ", i, i + (STEP - 1));
-                    if i == 0 {
-                        print!(" ");
-                    }
-                    if i < 10 {
-                        print!(" ");
-                    }
-                    for reg in i..i + STEP {
-                        print!("{:#020x?} ", core.read_register(reg as Register));
-                    }
-                    println!("");
-                }
-                println!(
-                    "mstatus: {:#10x?}  sstatus: {:#10x?}\nmepc: {:#10x?}  pc: {:#10x?}",
-                    core.read_csr(CSRRegister::mstatus),
-                    core.read_csr(CSRRegister::sstatus),
-                    core.read_csr(CSRRegister::mepc),
-                    core.pc()
-                );
-                for i in 0..core.symboltrace.len() {
-                    println!("{:x?}", core.symboltrace[i]);
-                }
-                panic!("EBREAK");
-            },
+            funct: |core, _args| Stage::ENTER_TRAP(crate::cpu::TrapCause::Breakpoint),
         }
     }
 
@@ -548,6 +553,7 @@ impl InstructionSelector<Itype> for Itype {
                 OpImm_Funct3::ADDI => Instruction::ADDI(self),
                 OpImm_Funct3::ANDI => Instruction::ANDI(self),
                 OpImm_Funct3::ORI => Instruction::ORI(self),
+                OpImm_Funct3::XORI => Instruction::XORI(self),
                 OpImm_Funct3::SLLI => Instruction::SLLI(self),
                 OpImm_Funct3::SRLI_SRAI => {
                     //"a specialization of the I-type format"
@@ -559,7 +565,7 @@ impl InstructionSelector<Itype> for Itype {
                     }
                 }
                 OpImm_Funct3::SLTI => Instruction::SLTI(self),
-                OpImm_Funct3::SLTIU => Instruction::SLTI(self),
+                OpImm_Funct3::SLTIU => Instruction::SLTIU(self),
                 _ => panic!(),
             },
             MajorOpcode::SYSTEM => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
@@ -579,7 +585,13 @@ impl InstructionSelector<Itype> for Itype {
             {
                 OpImm32_Funct3::ADDIW => Instruction::ADDIW(self),
                 OpImm32_Funct3::SLLIW => Instruction::SLLIW(self),
-                OpImm32_Funct3::SRLIW => Instruction::SRLIW(self),
+                OpImm32_Funct3::SRLIW_SRAIW => {
+                    match num::FromPrimitive::from_u8(self.funct7 as u8).unwrap() {
+                        Funct7::B0000000 => Instruction::SRLIW(self),
+                        Funct7::B0100000 => Instruction::SRAIW(self),
+                        _ => panic!(),
+                    }
+                }
                 _ => panic!("unknown funct3 for OpImm32: {:?}", self.funct3),
             },
             MajorOpcode::LOAD => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {

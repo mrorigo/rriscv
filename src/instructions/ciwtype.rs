@@ -16,6 +16,7 @@ use super::{
 pub struct CIWtype {
     pub opcode: CompressedOpcode,
     pub imm: u16,
+    pub nzuimm: u16,
     pub rd: Register,
     pub funct3: Funct3,
 }
@@ -25,9 +26,14 @@ impl CompressedFormatType for CIWtype {}
 
 impl CompressedFormatDecoder<CIWtype> for CIWtype {
     fn decode(word: u16) -> CIWtype {
+        let nzuimm = ((word >> 7) & 0x30)
+            | ((word >> 1) & 0x3c0)
+            | ((word >> 4) & 0x4)
+            | ((word >> 2) & 0x8);
         CIWtype {
             opcode: num::FromPrimitive::from_u8((word & 3) as u8).unwrap(),
             imm: ((word >> 5) as u16) & ((1 << 7) - 1),
+            nzuimm: nzuimm,
             rd: ((word >> 2) & 7) as Register + 8,
             funct3: num::FromPrimitive::from_u8(((word >> 13) & 0x7) as u8).unwrap(),
         }
@@ -54,7 +60,8 @@ impl Instruction<CIWtype> {
             mnemonic: "C.ADDI4SPN",
             funct: |core, args| {
                 let sp = core.read_register(2);
-                let value = sp + (args.imm as u64 >> 2);
+                let value = sp.wrapping_add((args.nzuimm as u32) as u64);
+                //println!("ADDI4SPN: sp={:#x?}  r{}={:#x?}", sp, args.rd, value);
                 debug_assert!(args.imm != 0);
                 Stage::writeback(args.rd, value)
             },

@@ -85,7 +85,7 @@ impl Instruction<Stype> {
                 let rs2v = core.read_register(args.rs2);
 
                 // The effective byte address is obtained by adding register rs1 to the sign-extended 12-bit offset
-                let addr = rs1v + (args.imm12 as u64).sign_extend(64 - 12) as VAddr;
+                let addr = rs1v.wrapping_add((args.imm12 as u64).sign_extend(64 - 12) as u64);
                 Stage::MEMORY(MemoryAccess::WRITE8(addr, rs2v as u8))
             },
         }
@@ -100,7 +100,7 @@ impl Instruction<Stype> {
                 let rs2v = core.read_register(args.rs2);
 
                 // The effective byte address is obtained by adding register rs1 to the sign-extended 12-bit offset
-                let addr = rs1v + (args.imm12 as u64).sign_extend(64 - 12) as VAddr;
+                let addr = rs1v.wrapping_add((args.imm12 as u64).sign_extend(64 - 12) as u64);
                 Stage::MEMORY(MemoryAccess::WRITE16(addr, rs2v as u16))
             },
         }

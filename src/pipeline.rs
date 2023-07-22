@@ -98,7 +98,7 @@ impl PipelineStages for Core {
         } else {
             return Stage::ENTER_TRAP(TrapCause::InstructionAccessFault);
         }
-
+        println!("f: pc={:#x?}", self.pc());
         // Determine if instruction is compressed
         let instruction = match (instruction & 0x3) == 0x03 {
             true => {
@@ -161,9 +161,12 @@ impl PipelineStages for Core {
     fn memory(&mut self, mmu: &mut MMU, memory_access: &MemoryAccess) -> Stage {
         match *memory_access {
             MemoryAccess::READ8(offset, register, sign_extend) => {
-                let value = mmu.read8(offset).unwrap();
+                let value = mmu.read8(offset);
+                if value.is_none() {
+                    return Stage::ENTER_TRAP(TrapCause::LoadAccessFault(offset));
+                }
                 pipeline_trace!(println!("m:    READ8 @ {:#x?}: {:#x?}", offset, value));
-
+                let value = value.unwrap();
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: register,
                     value: match sign_extend {
@@ -270,7 +273,7 @@ impl PipelineStages for Core {
     fn writeback(&mut self, writeback: Option<WritebackStage>) -> Stage {
         match writeback {
             Some(wb) if wb.register > 0 => {
-                (println!("w: x{} = {:#x?}", wb.register, wb.value));
+                pipeline_trace!(println!("w: x{} = {:#x?}", wb.register, wb.value));
 
                 self.write_register(wb.register, wb.value)
             }
@@ -291,29 +294,34 @@ impl PipelineStages for Core {
         }
         self.write_csr(instretcsr, instret.wrapping_add(1));
 
+        // Update clint
+
         Stage::FETCH
     }
 
     fn enter_trap(&mut self, cause: TrapCause) -> Stage {
-        panic!("ENTER_TRAP {:?}", cause);
+        self.debug_breakpoint(cause);
+        panic!("ENTER_TRAP {:#x?}", cause);
         let causereg = match self.pmode() {
             PrivMode::Machine => CSRRegister::mcause,
             PrivMode::User => CSRRegister::mcause,
             PrivMode::Supervisor => CSRRegister::scause,
         };
-        match cause as u16 & 0x100 {
-            0x100 => {
-                // interrupt
-                self.write_csr(causereg, cause as u8 as u64);
-                self.write_csr(CSRRegister::mtval, 0);
-                self.set_pc(self.pc() + 4);
-            }
-            _ => {
-                self.write_csr(causereg, (cause as u8 - 1) as u64);
-                // @TODO: mtval should be set to writeback-value if LoadAccessFault
-                self.write_csr(CSRRegister::mtval, self.pc());
-            }
-        }
+        todo!();
+
+        // match cause as u16 & 0x100 {
+        //     0x100 => {
+        //         // interrupt
+        //         self.write_csr(causereg, cause as u8 as u64);
+        //         self.write_csr(CSRRegister::mtval, 0);
+        //         self.set_pc(self.pc() + 4);
+        //     }
+        //     _ => {
+        //         self.write_csr(causereg, (cause as u8 - 1) as u64);
+        //         // @TODO: mtval should be set to writeback-value if LoadAccessFault
+        //         self.write_csr(CSRRegister::mtval, self.pc());
+        //     }
+        // }
         self.write_csr(CSRRegister::mepc, self.pc());
 
         // TODO: Handle WFI
