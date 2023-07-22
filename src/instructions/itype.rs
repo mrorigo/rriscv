@@ -124,6 +124,31 @@ impl Instruction<Itype> {
             },
         }
     }
+
+    pub fn JALR(itype: Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"JALR",
+            args: Some(itype),
+            funct: |core, args| {
+                let value = core.pc;
+
+                let se_imm12 = (args.imm12 as u64).sign_extend(64 - 12) as i64;
+
+                let rs1v = core.read_register(args.rs1);
+                let target = (rs1v as i64 + se_imm12) as u64;
+                core.set_pc(target);
+
+                if args.rd != 0 {
+                    Stage::WRITEBACK(Some(WritebackStage {
+                        register: args.rd,
+                        value,
+                    }))
+                } else {
+                    Stage::WRITEBACK(None)
+                }
+            },
+        }
+    }
 }
 
 impl Display for Instruction<Itype> {
@@ -154,6 +179,7 @@ impl InstructionSelector<Itype> for Itype {
                 CSR_Funct3::CSRRW => Instruction::CSRRW(*self),
                 _ => panic!(),
             },
+            MajorOpcode::JALR => Instruction::JALR(*self),
             _ => panic!(),
         }
     }
