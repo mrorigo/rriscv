@@ -1,20 +1,22 @@
+use std::fmt::Display;
+
 use crate::{
     cpu::{Core, Register, Xlen},
     pipeline::{Stage, WritebackStage},
 };
 
 use super::{
-    opcodes::CompressedOpcode, CompressedFormatDecoder, CompressedFormatType, Instruction,
-    InstructionExcecutor, InstructionSelector,
+    functions::Funct3, opcodes::CompressedOpcode, CompressedFormatDecoder, CompressedFormatType,
+    Instruction, InstructionExcecutor, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct CRtype {
     pub opcode: CompressedOpcode,
-    pub rs1: Register,
+    pub rs1_rd: Register,
     pub rs2: Register,
     pub funct1: u8,
-    pub funct3: u8,
+    pub funct3: Funct3,
 }
 
 impl CompressedFormatType for CRtype {}
@@ -24,7 +26,7 @@ impl CompressedFormatDecoder<CRtype> for CRtype {
         CRtype {
             opcode: num::FromPrimitive::from_u8((word & 3) as u8).unwrap(),
             rs2: ((word >> 2) & 31) as Register,
-            rs1: (word >> 7 & 31) as Register,
+            rs1_rd: (word >> 7 & 31) as Register,
             funct1: (word >> 12) as u8 & 1,
             funct3: num::FromPrimitive::from_u8(((word >> 13) & 0x7) as u8).unwrap(),
         }
@@ -33,18 +35,29 @@ impl CompressedFormatDecoder<CRtype> for CRtype {
 
 #[allow(non_snake_case)]
 impl Instruction<CRtype> {
-    pub fn C_ADD(crtype: CRtype) -> Instruction<CRtype> {
+    pub fn C_ADD(crtype: &CRtype) -> Instruction<CRtype> {
         Instruction {
-            args: Some(crtype),
+            args: Some(*crtype),
             mnemonic: "C.ADD",
             funct: |core, args| {
-                let rs1v = core.read_register(args.rs1);
+                let rs1v = core.read_register(args.rs1_rd);
                 let rs2v = core.read_register(args.rs2);
                 Stage::WRITEBACK(Some(WritebackStage {
-                    register: args.rs1,
+                    register: args.rs1_rd,
                     value: core.bit_extend(rs1v.wrapping_add(rs2v) as i64) as u64,
                 }))
             },
+        }
+    }
+}
+
+impl Display for Instruction<CRtype> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.args.is_some() {
+            write!(f, "{}", self.mnemonic)
+        } else {
+            let args = self.args.unwrap();
+            write!(f, "{} x{},x{}", self.mnemonic, args.rs1_rd, args.rs2)
         }
     }
 }
@@ -61,11 +74,11 @@ impl InstructionSelector<CRtype> for CRtype {
                     },
                     // C.EBREAK / C.JALR / C.ADD
                     1 => match self.rs2 {
-                        0 => match self.rs1 {
+                        0 => match self.rs1_rd {
                             0 => todo!("C.EBREAK"),
                             _ => todo!("C.JALR"),
                         },
-                        _ => Instruction::C_ADD(*self),
+                        _ => Instruction::C_ADD(self),
                     },
                     _ => panic!(),
                 }

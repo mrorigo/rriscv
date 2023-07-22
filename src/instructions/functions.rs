@@ -24,15 +24,37 @@ pub enum C0_Funct3 {
     C_SD = 0b111,
 }
 
+#[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, FromPrimitive)]
 #[repr(u8)]
-pub enum OpImmFunct3 {
+pub enum OpImm_Funct3 {
     ADDI = 0b000,
     SLTI = 0b010,
     SLTIU = 0b011,
     XORI = 0b100,
     ORI = 0b110,
     ANDI = 0b111,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, FromPrimitive)]
+#[repr(u8)]
+pub enum OpImm32_Funct3 {
+    ADDIW = 0b000,
+    SLLIW = 0b001,
+    SRLIW = 0b101,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, FromPrimitive)]
+#[repr(u8)]
+pub enum Load_Funct3 {
+    LB = 0x000,
+    LH = 0b001,
+    LW = 0b010,
+    LBU = 0b100,
+    LHU = 0b101,
+    LD = 0b011,
 }
 
 #[allow(non_camel_case_types)]

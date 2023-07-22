@@ -45,10 +45,10 @@ impl ImmediateDecoder<u16, u16> for CItype {
 
 #[allow(non_snake_case)]
 impl Instruction<CItype> {
-    fn C_LUI(citype: CItype) -> Instruction<CItype> {
+    fn C_LUI(args: &CItype) -> Instruction<CItype> {
         Instruction {
             mnemonic: "C.LUI",
-            args: Some(citype),
+            args: Some(*args),
             funct: |core, args| {
                 let value = (args.imm as u64) << 12;
                 debug_trace!(println!(
@@ -63,10 +63,10 @@ impl Instruction<CItype> {
         }
     }
 
-    fn C_ADDI(citype: CItype) -> Instruction<CItype> {
+    fn C_ADDI(args: &CItype) -> Instruction<CItype> {
         Instruction {
             mnemonic: "C.ADDI",
-            args: Some(citype),
+            args: Some(*args),
             funct: |core, args| {
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: args.rd,
@@ -78,10 +78,10 @@ impl Instruction<CItype> {
         }
     }
 
-    pub fn C_LI(citype: CItype) -> Instruction<CItype> {
+    pub fn C_LI(args: &CItype) -> Instruction<CItype> {
         Instruction {
             mnemonic: "C.LI",
-            args: Some(citype),
+            args: Some(*args),
             funct: |core, args| {
                 let value = (args.imm as u64).sign_extend(64 - 6);
                 Stage::WRITEBACK(Some(WritebackStage {
@@ -108,9 +108,9 @@ impl InstructionSelector<CItype> for CItype {
     fn select(&self, _xlen: Xlen) -> Instruction<CItype> {
         match self.opcode {
             CompressedOpcode::C1 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
-                C1_Funct3::C_LUI => Instruction::C_LUI(*self),
-                C1_Funct3::C_ADDI => Instruction::C_ADDI(*self),
-                C1_Funct3::C_LI => Instruction::C_LI(*self),
+                C1_Funct3::C_LUI => Instruction::C_LUI(self),
+                C1_Funct3::C_ADDI => Instruction::C_ADDI(self),
+                C1_Funct3::C_LI => Instruction::C_LI(self),
                 _ => panic!(),
             },
             _ => panic!(),

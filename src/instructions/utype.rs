@@ -42,10 +42,10 @@ impl Display for Instruction<Utype> {
 
 impl Instruction<Utype> {
     #[allow(non_snake_case)]
-    pub fn AUIPC(utype: Utype) -> Instruction<Utype> {
+    pub fn AUIPC(utype: &Utype) -> Instruction<Utype> {
         Instruction {
             mnemonic: "AUIPC",
-            args: Some(utype),
+            args: Some(*utype),
             funct: |core, args| {
                 const M: u32 = 1 << (20 - 1);
                 let se_imm20 = (args.imm20 ^ M) - M;
@@ -63,10 +63,10 @@ impl Instruction<Utype> {
     }
 
     #[allow(non_snake_case)]
-    pub fn LUI(utype: Utype) -> Instruction<Utype> {
+    pub fn LUI(utype: &Utype) -> Instruction<Utype> {
         Instruction {
             mnemonic: "LUI",
-            args: Some(utype),
+            args: Some(*utype),
             funct: |core, args| {
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: args.rd,
@@ -77,18 +77,19 @@ impl Instruction<Utype> {
     }
 }
 
-impl InstructionExcecutor for Instruction<Utype> {
-    fn run(&self, core: &mut Core) -> Stage {
-        (self.funct)(core, &self.args.unwrap())
-    }
-}
-
 impl InstructionSelector<Utype> for Utype {
     fn select(&self, _xlen: Xlen) -> Instruction<Utype> {
         match self.opcode {
-            MajorOpcode::AUIPC => Instruction::AUIPC(*self),
-            MajorOpcode::LUI => Instruction::LUI(*self),
+            MajorOpcode::AUIPC => Instruction::AUIPC(self),
+            MajorOpcode::LUI => Instruction::LUI(self),
             _ => panic!(),
         }
+    }
+}
+
+impl InstructionExcecutor for Instruction<Utype> {
+    fn run(&self, core: &mut Core) -> Stage {
+        debug_trace!(println!("{}", self.to_string()));
+        (self.funct)(core, &self.args.unwrap())
     }
 }

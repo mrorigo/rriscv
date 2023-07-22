@@ -65,7 +65,7 @@ pub trait CompressedFormatType {}
 pub struct Instruction<T> {
     args: Option<T>,
     mnemonic: &'static str,
-    funct: fn(&mut Core, &T) -> Stage,
+    funct: fn(&mut Core<'_>, &T) -> Stage,
 }
 
 pub trait FormatDecoder<T: InstructionFormatType> {

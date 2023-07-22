@@ -54,10 +54,10 @@ impl Display for Instruction<Rtype> {
 
 #[allow(non_snake_case)]
 impl Instruction<Rtype> {
-    pub fn MUL(itype: Rtype) -> Instruction<Rtype> {
+    pub fn MUL(itype: &Rtype) -> Instruction<Rtype> {
         Instruction {
             mnemonic: &"MUL",
-            args: Some(itype),
+            args: Some(*itype),
             funct: |core, args| {
                 let r1v = core.read_register(args.rs1);
                 let r2v = core.read_register(args.rs2);
@@ -95,7 +95,7 @@ impl InstructionSelector<Rtype> for Rtype {
             MajorOpcode::OP => match self.funct7 {
                 // RV32M
                 1 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
-                    RV32M_Funct3::MUL => Instruction::MUL(*self),
+                    RV32M_Funct3::MUL => Instruction::MUL(self),
                     _ => panic!(),
                 },
                 _ => todo!("Support non-RV32M OP opcode"),
@@ -106,6 +106,7 @@ impl InstructionSelector<Rtype> for Rtype {
 }
 impl InstructionExcecutor for Instruction<Rtype> {
     fn run(&self, core: &mut Core) -> Stage {
+        debug_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }

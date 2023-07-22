@@ -49,9 +49,9 @@ impl Display for Instruction<CIWtype> {
 #[allow(non_snake_case)]
 impl Instruction<CIWtype> {
     // adds a zero-extended non-zero immediate, scaled by 4, to the stack pointer, x2, and writes the result to rd
-    pub fn C_ADDI4SPN(ciwtype: CIWtype) -> Instruction<CIWtype> {
+    pub fn C_ADDI4SPN(ciwtype: &CIWtype) -> Instruction<CIWtype> {
         Instruction {
-            args: Some(ciwtype),
+            args: Some(*ciwtype),
             mnemonic: "C.ADDI4SPN",
             funct: |core, args| {
                 let sp = core.read_register(2);
@@ -69,7 +69,7 @@ impl Instruction<CIWtype> {
 impl InstructionSelector<CIWtype> for CIWtype {
     fn select(&self, _xlen: crate::cpu::Xlen) -> Instruction<CIWtype> {
         match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
-            C0_Funct3::C_ADDI4SPN => Instruction::C_ADDI4SPN(*self),
+            C0_Funct3::C_ADDI4SPN => Instruction::C_ADDI4SPN(self),
             _ => panic!(),
         }
     }

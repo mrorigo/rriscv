@@ -29,10 +29,10 @@ impl FormatDecoder<Jtype> for Jtype {
 
 #[allow(non_snake_case)]
 impl Instruction<Jtype> {
-    pub fn JAL(jtype: Jtype) -> Instruction<Jtype> {
+    pub fn JAL(args: &Jtype) -> Instruction<Jtype> {
         Instruction {
             mnemonic: "JAL",
-            args: Some(jtype),
+            args: Some(*args),
             funct: |core, args| {
                 const M: u32 = 1 << (20 - 1);
                 let se_imm20 = ((args.imm20 << 1) ^ M) - M;
@@ -66,7 +66,7 @@ impl ImmediateDecoder<u32, u32> for Jtype {
 impl InstructionSelector<Jtype> for Jtype {
     fn select(&self, xlen: Xlen) -> Instruction<Jtype> {
         match self.opcode {
-            MajorOpcode::JAL => Instruction::JAL(*self),
+            MajorOpcode::JAL => Instruction::JAL(self),
             _ => panic!(),
         }
     }

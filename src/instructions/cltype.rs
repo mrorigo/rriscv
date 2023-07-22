@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     cpu::{Core, Register},
     pipeline::Stage,
@@ -37,6 +39,21 @@ impl ImmediateDecoder<u16, u16> for CLtype {
     }
 }
 
+impl Display for Instruction<CLtype> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.args.is_some() {
+            write!(f, "{}", self.mnemonic)
+        } else {
+            let args = self.args.unwrap();
+            write!(
+                f,
+                "{} x{},x{},{}",
+                self.mnemonic, args.rd, args.rs1, args.imm
+            )
+        }
+    }
+}
+
 impl InstructionSelector<CLtype> for CLtype {
     fn select(&self, _xlen: crate::cpu::Xlen) -> Instruction<CLtype> {
         todo!()
@@ -44,6 +61,7 @@ impl InstructionSelector<CLtype> for CLtype {
 }
 impl InstructionExcecutor for Instruction<CLtype> {
     fn run(&self, core: &mut Core) -> Stage {
+        debug_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }

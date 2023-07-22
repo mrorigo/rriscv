@@ -44,9 +44,9 @@ impl Instruction<CSStype> {
     // C.SDSP is an RV64C/RV128C-only instruction that stores a 64-bit value in register rs2 to memory.
     // It computes an effective address by adding the zero-extended offset, scaled by 8, to the stack pointer,
     // x2. It expands to sd rs2, offset[8:3](x2).
-    pub fn C_SDSP(csstype: CSStype) -> Instruction<CSStype> {
+    pub fn C_SDSP(args: &CSStype) -> Instruction<CSStype> {
         Instruction {
-            args: Some(csstype),
+            args: Some(*args),
             mnemonic: "C.SDSP",
             funct: |core, args| {
                 let sp = core.read_register(2);
@@ -61,9 +61,9 @@ impl Instruction<CSStype> {
         }
     }
 
-    pub fn C_FSWSP(csstype: CSStype) -> Instruction<CSStype> {
+    pub fn C_FSWSP(args: &CSStype) -> Instruction<CSStype> {
         Instruction {
-            args: Some(csstype),
+            args: Some(*args),
             mnemonic: "C.FSWSP",
             funct: |core, args| todo!(),
         }
@@ -75,8 +75,8 @@ impl InstructionSelector<CSStype> for CSStype {
         match self.funct3 {
             // C.FSWSP or C.SDSP
             Funct3::B111 => match xlen {
-                Xlen::Bits32 => Instruction::C_FSWSP(*self),
-                _ => Instruction::C_SDSP(*self),
+                Xlen::Bits32 => Instruction::C_FSWSP(self),
+                _ => Instruction::C_SDSP(self),
             },
             _ => panic!(),
         }

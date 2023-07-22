@@ -3,7 +3,7 @@
 //! actual execution of instructions take place.
 
 use crate::{
-    cpu::{Core, Register},
+    cpu::Core,
     instructions::{
         map::{COMPRESSED_FORMAT_MAP, FORMAT_MAP},
         CompressedFormat, InstructionFormat,
@@ -14,7 +14,7 @@ use crate::{
 use super::{
     btype::Btype, cbtype::CBtype, citype::CItype, ciwtype::CIWtype, cjtype::CJtype, cltype::CLtype,
     crtype::CRtype, csstype::CSStype, cstype::CStype, itype::Itype, jtype::Jtype, rtype::Rtype,
-    stype::Stype, utype::Utype, CompressedFormatDecoder, FormatDecoder, ImmediateDecoder,
+    stype::Stype, utype::Utype, CompressedFormatDecoder, FormatDecoder,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -47,6 +47,7 @@ impl InstructionDecoder for Core<'_> {
         match instruction.compressed {
             false => {
                 let opcode_idx = (word & 0x7f) as usize;
+                //debug_trace!(println!("opcode_idx: {}", opcode_idx));
                 match FORMAT_MAP[opcode_idx] {
                     InstructionFormat::R => DecodedInstruction::R(Rtype::decode(word)),
                     InstructionFormat::U => DecodedInstruction::U(Utype::decode(word)),
@@ -57,6 +58,7 @@ impl InstructionDecoder for Core<'_> {
                     _ => panic!("invalid format {:?}", FORMAT_MAP[opcode_idx]),
                 }
             }
+
             true => {
                 let funct3 = ((word >> 11) & (0x7 << 2)) as usize;
                 let c_opcode_idx = ((word) & 3) as usize | funct3;
@@ -69,7 +71,9 @@ impl InstructionDecoder for Core<'_> {
                     CompressedFormat::CIW => DecodedInstruction::CIW(CIWtype::decode(word as u16)),
                     CompressedFormat::CL => DecodedInstruction::CL(CLtype::decode(word as u16)),
                     CompressedFormat::CJ => todo!(),
-                    CompressedFormat::Unknown => panic!(),
+                    CompressedFormat::Unknown => {
+                        panic!("{} is an unknown compressed opcode index", c_opcode_idx)
+                    }
                     // _ => panic!(
                     //     "invalid format for {:?} {:?}",
                     //     opcode,
