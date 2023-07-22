@@ -21,6 +21,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "dtb"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be6c6e1672a044abd9652045ba11beb1c7fbec7e5262dcba54795e82aa577971"
+
+[[package]]
 name = "elfloader"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -155,6 +161,7 @@ dependencies = [
 name = "rriscv"
 version = "0.1.0"
 dependencies = [
+ "dtb",
  "elfloader",
  "num",
  "num-derive",
