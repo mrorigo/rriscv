@@ -55,8 +55,8 @@ impl ElfLoader for Loader<'_> {
         //     "ELF load: base={:#x} region into = {:#x} -- {:#x}  vbase: {:#x}",
         //     base, start, end, self.vbase
         // );
-        for offs in 0..region.len() {
-            self.memory.write8(offs as u64 + start, region[offs]);
+        for offs in (0..region.len()).step_by(1) {
+            self.memory.write8(offs as u64 + start as u64, region[offs]);
         }
         Ok(())
     }

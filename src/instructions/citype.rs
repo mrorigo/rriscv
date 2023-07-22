@@ -186,10 +186,9 @@ impl InstructionSelector<CItype> for CItype {
     fn select(&self, _xlen: Xlen) -> Instruction<CItype> {
         match self.opcode {
             CompressedOpcode::C1 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
-                C1_Funct3::C_LUI => match self.rs1_rd {
-                    2 => Instruction::C_ADDI16SP(self),
-                    0 => panic!(),
-                    _ => Instruction::C_LUI(self),
+                C1_Funct3::C_LUI => match self.rs1_rd != 0 && self.rs1_rd != 2 {
+                    true => Instruction::C_LUI(self),
+                    false => Instruction::C_ADDI16SP(self),
                 },
                 C1_Funct3::C_ADDI => Instruction::C_ADDI(self),
                 C1_Funct3::C_LI => Instruction::C_LI(self),

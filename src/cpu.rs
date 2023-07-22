@@ -338,6 +338,7 @@ impl Core {
     }
 
     pub fn cycle(&mut self, mmu: &mut MMU) {
+        cpu_trace!(println!("stage: {:?}", self.stage));
         self.stage = match self.stage {
             Stage::ENTER_TRAP(cause) => self.enter_trap(cause),
             Stage::EXIT_TRAP => self.exit_trap(),

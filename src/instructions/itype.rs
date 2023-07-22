@@ -252,7 +252,7 @@ impl Instruction<Itype> {
                 };
 
                 let shamt = (args.imm12) & mask;
-                let value = ((rs1v as i64) >> shamt) as u64;
+                let value = ((rs1v as u64) >> shamt);
                 Stage::writeback(args.rd, value)
             },
         }

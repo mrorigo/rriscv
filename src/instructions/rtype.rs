@@ -178,9 +178,9 @@ impl Instruction<Rtype> {
             mnemonic: &"SUBW",
             args: Some(*args),
             funct: |core, args| {
-                let r1v = core.read_register(args.rs1) as u32;
-                let r2v = core.read_register(args.rs2) as u32;
-                let value = core.bit_extend((r2v.wrapping_sub(r1v)) as i64) as u64;
+                let r1v = core.read_register(args.rs1) as i32;
+                let r2v = core.read_register(args.rs2) as i32;
+                let value = core.bit_extend((r1v.wrapping_sub(r2v)) as i64) as u64;
                 Stage::writeback(args.rd, value)
             },
         }
@@ -214,6 +214,19 @@ impl Instruction<Rtype> {
                     0 => Stage::WRITEBACK(None),
                     _ => Stage::writeback(args.rd, value),
                 }
+            },
+        }
+    }
+
+    pub fn SRA(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: &"SRA",
+            args: Some(*args),
+            funct: |core, args| {
+                let r1v = core.read_register(args.rs1) as i64;
+                let r2v = core.read_register(args.rs2) as u32;
+                let value = core.bit_extend((r1v.wrapping_shr(r2v & 0x1f)) as i64) as u64;
+                Stage::writeback(args.rd, value)
             },
         }
     }
@@ -262,7 +275,7 @@ impl InstructionSelector<Rtype> for Rtype {
                 },
                 Funct7::B0100000 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {
                     Op_Funct3::ADD_SUB => Instruction::SUB(self),
-                    Op_Funct3::SRL_SRA => todo!("SRA, since Funct7!=0"),
+                    Op_Funct3::SRL_SRA => Instruction::SRA(self), //todo!("SRA, since Funct7!=0"),
                     _ => todo!("keine anung"),
                 },
                 Funct7::B0000000 => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {

@@ -55,7 +55,8 @@ impl MemoryOperations<MMU, u8> for MMU {
         } else if self.virtio.includes(addr) {
             todo!("VIRTIO I/O")
         } else {
-            panic!("{:#x?} is not mapped to memory", addr)
+            None
+            //panic!("{:#x?} is not mapped to memory", addr)
         }
     }
 
@@ -72,7 +73,8 @@ impl MemoryOperations<MMU, u8> for MMU {
         } else if self.virtio.includes(addr) {
             todo!("VIRTIO I/O")
         } else {
-            panic!("{:#x?} is not mapped to memory", addr)
+            false
+            //            panic!("{:#x?} is not mapped to memory", addr)
         }
     }
 

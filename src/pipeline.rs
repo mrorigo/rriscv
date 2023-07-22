@@ -54,7 +54,7 @@ pub struct WritebackStage {
     pub value: u64,
 }
 
-//#[derive(Debug)]
+#[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum Stage {
     ENTER_TRAP(TrapCause),
@@ -90,7 +90,14 @@ pub trait PipelineStages {
 
 impl PipelineStages for Core {
     fn fetch(&mut self, mmu: &mut MMU) -> Stage {
-        let instruction = mmu.read_32(self.pc()).unwrap();
+        let word = mmu.read_32(self.pc());
+
+        let instruction;
+        if word.is_some() {
+            instruction = word.unwrap()
+        } else {
+            return Stage::ENTER_TRAP(TrapCause::InstructionAccessFault);
+        }
 
         // Determine if instruction is compressed
         let instruction = match (instruction & 0x3) == 0x03 {
@@ -108,11 +115,11 @@ impl PipelineStages for Core {
                 }
             }
             false => {
-                // pipeline_trace!(println!(
-                //     "f:     instruction @ {:#x?}: {:#x?} (C)",
-                //     self.pc(),
-                //     instruction & 0xffff,
-                // ));
+                pipeline_trace!(println!(
+                    "f:     instruction @ {:#x?}: {:#x?} (C)",
+                    self.pc(),
+                    instruction & 0xffff,
+                ));
                 self.add_pc(2);
                 RawInstruction {
                     compressed: true,
@@ -217,8 +224,10 @@ impl PipelineStages for Core {
                 mmu.write8(offset, value);
                 Stage::WRITEBACK(None)
             }
-            MemoryAccess::WRITE16(_offset, _value) => {
-                todo!();
+            MemoryAccess::WRITE16(offset, value) => {
+                mmu.write8(offset + 1, (value >> 8) as u8);
+                mmu.write8(offset, (value & 0xff) as u8);
+                Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE32(offset, value) => {
                 pipeline_trace!(println!("m:    WRITE32 @ {:#x?}: {:#x?}", offset, value));
@@ -279,10 +288,11 @@ impl PipelineStages for Core {
     }
 
     fn enter_trap(&mut self, cause: TrapCause) -> Stage {
+        panic!("ENTER_TRAP {:?}", cause);
         let causereg = match self.pmode() {
             PrivMode::Machine => CSRRegister::mcause,
-            PrivMode::Supervisor => CSRRegister::sstatus,
-            _ => panic!(),
+            PrivMode::User => CSRRegister::mcause,
+            PrivMode::Supervisor => CSRRegister::scause,
         };
         match cause as u16 & 0x100 {
             0x100 => {
@@ -306,6 +316,8 @@ impl PipelineStages for Core {
         );
 
         self.set_pc(self.read_csr(CSRRegister::mtvec) - 4);
+
+        panic!("TRAP");
         Stage::EXIT_TRAP
     }
 

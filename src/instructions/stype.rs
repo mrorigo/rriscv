@@ -75,6 +75,7 @@ impl Instruction<Stype> {
             },
         }
     }
+
     pub fn SB(args: &Stype) -> Instruction<Stype> {
         Instruction {
             mnemonic: "SB",
@@ -89,6 +90,21 @@ impl Instruction<Stype> {
             },
         }
     }
+
+    pub fn SH(args: &Stype) -> Instruction<Stype> {
+        Instruction {
+            mnemonic: "SH",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1);
+                let rs2v = core.read_register(args.rs2);
+
+                // The effective byte address is obtained by adding register rs1 to the sign-extended 12-bit offset
+                let addr = rs1v + (args.imm12 as u64).sign_extend(64 - 12) as VAddr;
+                Stage::MEMORY(MemoryAccess::WRITE16(addr, rs2v as u16))
+            },
+        }
+    }
 }
 
 impl InstructionSelector<Stype> for Stype {
@@ -97,7 +113,7 @@ impl InstructionSelector<Stype> for Stype {
             MajorOpcode::STORE => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
                 Store_Funct3::SD => Instruction::SD(self),
                 Store_Funct3::SB => Instruction::SB(self),
-                Store_Funct3::SH => todo!(),
+                Store_Funct3::SH => Instruction::SH(self),
                 Store_Funct3::SW => Instruction::SW(self),
             },
             _ => panic!(),
