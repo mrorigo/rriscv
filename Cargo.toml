@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+ctrlc = "3.2.4"
 dtb = "0.2.0"
 elfloader = "0.16.0"
 include_bytes_aligned = "0.1.2"
@@ -13,3 +14,4 @@ num = "0.4.0"
 num-derive = "0.3.3"
 num-traits = "0.2.15"
 quark = "1.1.0"
+rustyline = "10.1.1"
