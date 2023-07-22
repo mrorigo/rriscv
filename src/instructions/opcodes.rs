@@ -17,7 +17,7 @@ pub enum MajorOpcode {
     JALR = 0b1100111,
     JAL = 0b1101111,
     OP = 0b0110011,
-    // AMO,
+    AMO = 0b101111,
     // OP_32,
     // OP_FP,
     OP_IMM = 0b0010011,

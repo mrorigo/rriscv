@@ -19,6 +19,8 @@ macro_rules! pipeline_trace {
 
 #[derive(Debug, Copy, Clone)]
 pub enum MemoryAccess {
+    AMOSWAP_W(VAddr, VAddr, Register),
+    AMOSWAP_D(VAddr, VAddr, Register),
     READ8(VAddr, Register),
     READ16(VAddr, Register),
     READ32(VAddr, Register),
@@ -219,6 +221,14 @@ impl PipelineStages for Core {
                 //     .write_single(offset, value as u64, MemoryAccessWidth::LONG);
                 Stage::WRITEBACK(None)
             }
+            MemoryAccess::AMOSWAP_W(from, to, rd) => {
+                let v1 = mmu.read_32(from).unwrap();
+                let v2 = mmu.read_32(to).unwrap();
+                mmu.write_32(to, v1);
+                mmu.write_32(from, v2);
+                Stage::writeback(rd, v1 as u64)
+            }
+            MemoryAccess::AMOSWAP_D(_from, _to, _rd) => todo!(),
         }
     }
 

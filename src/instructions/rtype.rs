@@ -2,11 +2,11 @@ use std::fmt::Display;
 
 use crate::{
     cpu::{Core, Register, Xlen},
-    pipeline::Stage,
+    pipeline::{MemoryAccess, Stage},
 };
 
 use super::{
-    functions::{Funct3, Funct7, Op_Funct3, RV32M_Funct3},
+    functions::{Funct3, Funct5, Funct7, Op_Funct3, RV32M_Funct3},
     opcodes::MajorOpcode,
     FormatDecoder, Instruction, InstructionExcecutor, InstructionFormatType, InstructionSelector,
 };
@@ -18,6 +18,7 @@ pub struct Rtype {
     pub rs1: Register,
     pub rs2: Register,
     pub funct3: Funct3,
+    pub funct5: Funct5,
     pub funct7: Funct7,
 }
 
@@ -31,7 +32,10 @@ impl FormatDecoder<Rtype> for Rtype {
             rs1: ((word >> 15) & 31) as Register,
             rs2: ((word >> 20) & 31) as Register,
             funct3: num::FromPrimitive::from_u8(((word >> 12) & 7) as u8).unwrap(),
-            funct7: num::FromPrimitive::from_u8(((word >> 25) & 0x7f) as u8).unwrap(),
+            funct7: num::FromPrimitive::from_u8(((word >> 25) & 0x7f) as u8)
+                .unwrap_or(Funct7::B0000000),
+            funct5: num::FromPrimitive::from_u8(((word >> 27) & 0x1f) as u8)
+                .unwrap_or(Funct5::AMOADD_W), // @FIXME: Default?
         }
     }
 }
@@ -122,9 +126,27 @@ impl Instruction<Rtype> {
     }
 }
 
+impl Instruction<Rtype> {
+    pub fn AMOSWAP_W(args: &Rtype) -> Instruction<Rtype> {
+        Instruction {
+            mnemonic: "AMOSWAP.W",
+            args: Some(*args),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1);
+                let rs2v = core.read_register(args.rs1);
+                Stage::MEMORY(MemoryAccess::AMOSWAP_W(rs1v, rs2v, args.rd))
+            },
+        }
+    }
+}
+
 impl InstructionSelector<Rtype> for Rtype {
     fn select(&self, _xlen: Xlen) -> Instruction<Rtype> {
         match self.opcode {
+            MajorOpcode::AMO => match self.funct5 {
+                Funct5::AMOSWAP_W => Instruction::AMOSWAP_W(self),
+                _ => panic!(),
+            },
             MajorOpcode::OP => match self.funct7 {
                 // RV32M
                 Funct7::RV32M => match num::FromPrimitive::from_u8(self.funct3 as u8).unwrap() {

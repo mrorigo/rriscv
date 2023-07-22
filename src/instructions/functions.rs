@@ -12,6 +12,21 @@ pub enum Funct3 {
 }
 
 #[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy, PartialEq, FromPrimitive)]
+#[repr(u8)]
+pub enum Funct5 {
+    AMOADD_W = 0b00000,
+    AMOSWAP_W = 0b00001,
+    AMOXOR_W = 0b00100,
+    AMOAND_W = 0b01100,
+    AMOOR_W = 0b01000,
+    AMOMIN_W = 0b10000,
+    AMOMAX_W = 0b10100,
+    AMOMINU_W = 0b11000,
+    AMOMAXU_W = 0b11100,
+}
+
+#[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, Copy, Clone, FromPrimitive)]
 #[repr(u8)]
 pub enum Funct7 {
