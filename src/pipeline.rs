@@ -5,7 +5,7 @@ use crate::{
     cpu::{CSRRegister, Core, MipMask, PrivMode, Register, RegisterValue, TrapCause, Xlen},
     instructions::{
         decoder::{DecodedInstruction, InstructionDecoder},
-        InstructionExcecutor, InstructionSelector,
+        InstructionSelector,
     },
     memory::{MemoryOperations, RAMOperations},
     mmu::MMU,
@@ -61,8 +61,7 @@ impl RawInstruction {
             true => {
                 pipeline_trace!(println!(
                     "f:     instruction @ {:#x}: {:#x}",
-                    self.pc(),
-                    instruction
+                    pc, instruction
                 ));
                 RawInstruction {
                     compressed: false,
@@ -73,7 +72,7 @@ impl RawInstruction {
             false => {
                 pipeline_trace!(println!(
                     "f:     instruction @ {:#x?}: {:#x?} (C)",
-                    self.pc(),
+                    pc,
                     instruction & 0xffff,
                 ));
                 RawInstruction {
@@ -142,20 +141,20 @@ impl PipelineStages for Core {
 
     fn execute(&mut self, decoded: &DecodedInstruction) -> Stage {
         match *decoded {
-            DecodedInstruction::I(inst) => inst.select(self.xlen).run(self),
-            DecodedInstruction::U(inst) => inst.select(self.xlen).run(self),
-            DecodedInstruction::CI(param) => param.select(self.xlen).run(self),
-            DecodedInstruction::J(param) => param.select(self.xlen).run(self),
-            DecodedInstruction::CR(param) => param.select(self.xlen).run(self),
-            DecodedInstruction::B(param) => param.select(self.xlen).run(self),
-            DecodedInstruction::S(param) => param.select(self.xlen).run(self),
-            DecodedInstruction::R(param) => param.select(self.xlen).run(self),
-            DecodedInstruction::CSS(param) => param.select(self.xlen).run(self),
-            DecodedInstruction::CIW(param) => param.select(self.xlen).run(self),
-            DecodedInstruction::CL(param) => param.select(self.xlen).run(self),
-            DecodedInstruction::CS(param) => param.select(self.xlen).run(self),
-            DecodedInstruction::CB(param) => param.select(self.xlen).run(self),
-            DecodedInstruction::CJ(param) => param.select(self.xlen).run(self),
+            DecodedInstruction::I(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
+            DecodedInstruction::U(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
+            DecodedInstruction::CI(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
+            DecodedInstruction::J(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
+            DecodedInstruction::CR(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
+            DecodedInstruction::B(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
+            DecodedInstruction::S(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
+            DecodedInstruction::R(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
+            DecodedInstruction::CSS(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
+            DecodedInstruction::CIW(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
+            DecodedInstruction::CL(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
+            DecodedInstruction::CS(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
+            DecodedInstruction::CB(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
+            DecodedInstruction::CJ(typ) => ((typ.select(self.xlen)).funct)(self, &typ),
         }
     }
 
@@ -320,6 +319,9 @@ impl PipelineStages for Core {
         // @TODO: We might need to change privmode!
         let bit = csr_cause & 0xffff;
 
+        let old_privilege_mode = self.pmode();
+        let mut epc_value = self.pc();
+
         let new_privilege_mode = match ((mdeleg >> bit) & 1) == 0 {
             true => PrivMode::Machine,
             false => match ((sdeleg >> bit) & 1) == 0 {
@@ -328,7 +330,7 @@ impl PipelineStages for Core {
             },
         };
 
-        let current_status = match self.pmode() {
+        let current_status = match old_privilege_mode {
             PrivMode::Machine => self.read_csr(CSRRegister::mstatus),
             PrivMode::Supervisor => self.read_csr(CSRRegister::sstatus),
             PrivMode::User => self.read_csr(CSRRegister::ustatus),
@@ -349,9 +351,8 @@ impl PipelineStages for Core {
             let current_uie = current_status & 1;
 
             println!(
-                "IRQ!, ie: {:#x}  sie: {:#x?}",
-                ie,
-                (self.read_csr(CSRRegister::sie) >> 1) & 1
+                "IRQ!, status: {:#x}  sie: {:#x?}",
+                current_status, current_sie
             );
 
             // Unmask IRQ from mip
@@ -360,12 +361,14 @@ impl PipelineStages for Core {
                 self.read_csr(CSRRegister::mip) & !(mip_mask.unwrap() as u64),
             );
 
-            if new_privilege_mode < self.pmode() {
+            if new_privilege_mode < old_privilege_mode {
+                panic!("Ignore irq!?");
                 return Stage::FETCH;
-            } else if self.pmode() == new_privilege_mode {
-                match self.pmode() {
+            } else if old_privilege_mode == new_privilege_mode {
+                match old_privilege_mode {
                     PrivMode::Machine if current_mie == 0 => return Stage::FETCH,
                     PrivMode::Supervisor if current_sie == 0 => {
+                        panic!("Ignore irq 2!?");
                         return Stage::FETCH;
                     }
                     PrivMode::User if current_uie == 0 => return Stage::FETCH,
@@ -375,7 +378,7 @@ impl PipelineStages for Core {
             println!("IRQ NOT masked out!");
 
             let msie = (ie >> 3) & 1;
-            let ssie = (ie >> 1) & 1;
+            let ssie = current_sie;
             let usie = ie & 1;
 
             let mtie = (ie >> 7) & 1;
@@ -398,9 +401,18 @@ impl PipelineStages for Core {
                 TrapCause::MachineExternalIrq if meie == 0 => return Stage::FETCH,
                 _ => {} // Not masked!
             }
+        } else {
+            // Not sure how to implement this, but epc should be instruction address for EBREAK/ECALL
+            epc_value = match cause {
+                TrapCause::Breakpoint
+                | TrapCause::EnvCallFromUMode
+                | TrapCause::EnvCallFromSMode
+                | TrapCause::EnvCallFromMMode => epc_value.wrapping_sub(4),
+                _ => epc_value,
+            };
         }
+        println!("IRQ NOT masked out 2!");
 
-        let old_privilege_mode = self.pmode();
         // Masking passed, execute trap
         self.set_pmode(new_privilege_mode);
 
@@ -413,28 +425,29 @@ impl PipelineStages for Core {
 
         let cause_reg = match new_privilege_mode {
             PrivMode::Machine => CSRRegister::mcause,
-            PrivMode::User => CSRRegister::mcause,
             PrivMode::Supervisor => CSRRegister::scause,
+            PrivMode::User => CSRRegister::ucause,
             _ => panic!(),
         };
 
         let tval_reg = match new_privilege_mode {
             PrivMode::Machine => CSRRegister::mtval,
-            PrivMode::User => CSRRegister::stval,
-            PrivMode::Supervisor => CSRRegister::utval,
+            PrivMode::Supervisor => CSRRegister::stval,
+            PrivMode::User => CSRRegister::utval,
             _ => panic!(),
         };
 
         let tvec_reg = match new_privilege_mode {
             PrivMode::Machine => CSRRegister::mtvec,
-            PrivMode::User => CSRRegister::utvec,
             PrivMode::Supervisor => CSRRegister::stvec,
+            PrivMode::User => CSRRegister::utvec,
             _ => panic!(),
         };
 
-        self.write_csr(epc_address, self.pc());
+        self.write_csr(epc_address, epc_value);
         self.write_csr(cause_reg, csr_cause);
         self.write_csr(tval_reg, self.pc()); // @TODO: Not always correct (could be -4 for IllegalInstruction etc?)
+
         let tvec_val = self.read_csr(tvec_reg);
         self.set_pc(tvec_val);
         //println!("trap: tvec_reg={:?}", tvec_reg);
@@ -455,16 +468,11 @@ impl PipelineStages for Core {
                 let status = self.read_csr(CSRRegister::sstatus);
                 let sie = (status >> 1) & 1;
                 let new_status = (status & !0x122) | (sie << 5) | ((1) << 8);
-                self.write_csr(CSRRegister::mstatus, new_status);
+                self.write_csr(CSRRegister::sstatus, new_status);
             }
             _ => panic!(),
         }
 
-        // if cause == TrapCause::Breakpoint {
-        //     self.debug_breakpoint(cause,);
-        // }
-
-        //panic!("TRAP HANDLED!");
         Stage::FETCH
     }
 }

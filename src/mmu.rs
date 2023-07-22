@@ -136,7 +136,7 @@ impl MemoryOperations<MMU, u8> for MMU {
             //     "{:#x?} is not mapped to memory: {:#x?} - {:#x?}",
             //     addr, self.memory.range.start, self.memory.range.end
             // );
-            return Err(TrapCause::StoreAccessFault(addr));
+            return Err(TrapCause::LoadAccessFault(addr));
         };
         Ok(value.unwrap())
     }
@@ -366,23 +366,32 @@ impl MMU {
         match self.pmode {
             PrivMode::Machine => match access_type {
                 MemoryAccessType::EXECUTE => Some(va.address() as PAddr),
-                _ => match ((self.mstatus >> 17) & 1) == 0 {
-                    true => Some(va.address() as PAddr),
-                    false => {
-                        panic!("");
-                    }
+                _ => match (self.mstatus >> 17) & 1 {
+                    0 => Some(va.address()),
+                    _ => match num::FromPrimitive::from_u64((self.mstatus >> 9) & 3).unwrap() {
+                        PrivMode::Machine => Some(va.address() as PAddr),
+                        _ => {
+                            panic!("");
+                        }
+                    },
                 },
             },
             PrivMode::Supervisor | PrivMode::User => match self.addressing_mode {
                 AddressingMode::None => Some(va.address()),
                 AddressingMode::SV32 => todo!(),
-                AddressingMode::SV39 => self.traverse_pagetable(
-                    va.address(),
-                    3 - 1,
-                    self.ppn,
-                    &va.get_vpns(),
-                    access_type,
-                ),
+                AddressingMode::SV39 => {
+                    let pa = self.traverse_pagetable(
+                        va.address(),
+                        3 - 1,
+                        self.ppn,
+                        &va.get_vpns(),
+                        access_type,
+                    );
+                    // if pa.is_none() {
+                    //     panic!("Failed to translate {:#x?}", va.address());
+                    // }
+                    pa
+                }
             },
             _ => panic!(),
         }
@@ -411,6 +420,7 @@ impl MMU {
         self.plic.tick(self.virtio.is_interrupting(), false, mip)
     }
 
+    /// Used for instruction fetch, accesses memory with perm EXECUTE
     pub fn fetch(&mut self, addr: VAddr) -> Result<u32, TrapCause> {
         let addr = self.translate_address(&addr, MemoryAccessType::EXECUTE);
 

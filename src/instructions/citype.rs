@@ -11,7 +11,7 @@ use super::{
     functions::{C1_Funct3, C2_Funct3, Funct3},
     opcodes::CompressedOpcode,
     CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder, Instruction,
-    InstructionExcecutor, InstructionFormatType, InstructionSelector,
+    InstructionFormatType, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -220,12 +220,5 @@ impl InstructionSelector<CItype> for CItype {
             },
             _ => panic!("opcode {:#x?} unknown for CIType", self.opcode),
         }
-    }
-}
-
-impl InstructionExcecutor<CItype> for Instruction<CItype> {
-    fn run(&self, core: &mut Core) -> Stage {
-        instruction_trace!(println!("{}", self.to_string()));
-        (self.funct)(core, &self.args.unwrap())
     }
 }

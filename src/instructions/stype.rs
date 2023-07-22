@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     functions::Store_Funct3, opcodes::MajorOpcode, FormatDecoder, ImmediateDecoder, Instruction,
-    InstructionExcecutor, InstructionFormatType, InstructionSelector, UncompressedFormatType,
+    InstructionFormatType, InstructionSelector, UncompressedFormatType,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -139,12 +139,5 @@ impl Display for Instruction<Stype> {
                 self.mnemonic, args.rs2, args.imm12, args.rs1,
             )
         }
-    }
-}
-
-impl InstructionExcecutor<Stype> for Instruction<Stype> {
-    fn run(&self, core: &mut Core) -> Stage {
-        instruction_trace!(println!("{}", self.to_string()));
-        (self.funct)(core, &self.args.unwrap())
     }
 }

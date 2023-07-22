@@ -12,8 +12,7 @@ use super::{
         CSR_Funct3, Funct3, Funct7, Load_Funct3, MiscMem_Funct3, OpImm32_Funct3, OpImm_Funct3,
     },
     opcodes::MajorOpcode,
-    FormatDecoder, Instruction, InstructionExcecutor, InstructionFormatType, InstructionSelector,
-    UncompressedFormatType,
+    FormatDecoder, Instruction, InstructionFormatType, InstructionSelector, UncompressedFormatType,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -554,17 +553,26 @@ impl Instruction<Itype> {
             mnemonic: "SRET",
             args: Some(*args),
             funct: |core, _args| {
-                core.set_pc(core.read_csr(CSRRegister::sepc));
-
                 let status = core.read_csr(CSRRegister::sstatus);
+                let tsr = (status >> 22) & 1 == 1;
+                if tsr {
+                    return Stage::TRAP(TrapCause::IllegalInstruction(core.pc()));
+                }
+
+                let sepc = core.read_csr(CSRRegister::sepc);
+                println!("SRET: sepc: {:#x?}", sepc);
+                core.set_pc(sepc);
+
                 let spie = (status >> 5) & 1;
                 let spp = (status >> 8) & 1;
                 let mprv = match core.pmode() {
                     crate::cpu::PrivMode::Machine => (status >> 17) & 1,
                     _ => 0,
                 };
-                // Write MPIE[7] to MIE[3], set MPIE[7] to 1, set MPP[12:11] to 0 and write 1 to MPRV[17]
-                let new_status = (status & !0x21888) | (mprv << 17) | (spie << 3) | (1 << 7);
+
+                // @TODO: SRET should also raise an illegal instruction exception when TSR=1 in mstatus
+
+                let new_status = (status & !0x20122) | (mprv << 17) | (spie << 1) | (1 << 5);
                 core.write_csr(CSRRegister::sstatus, new_status);
 
                 // mpp is the privilege level the CPU was in prior to trapping to machine privilege mode
@@ -667,12 +675,5 @@ impl InstructionSelector<Itype> for Itype {
             }
             _ => panic!(),
         }
-    }
-}
-
-impl InstructionExcecutor<Itype> for Instruction<Itype> {
-    fn run(&self, core: &mut Core) -> Stage {
-        instruction_trace!(println!("{}", self.to_string()));
-        (self.funct)(core, &self.args.unwrap())
     }
 }

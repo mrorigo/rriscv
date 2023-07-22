@@ -6,8 +6,8 @@ use crate::{
 };
 
 use super::{
-    opcodes::MajorOpcode, FormatDecoder, Instruction, InstructionExcecutor, InstructionFormatType,
-    InstructionSelector, UncompressedFormatType,
+    opcodes::MajorOpcode, FormatDecoder, Instruction, InstructionFormatType, InstructionSelector,
+    UncompressedFormatType,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -76,12 +76,5 @@ impl InstructionSelector<Utype> for Utype {
             MajorOpcode::LUI => Instruction::LUI(self),
             _ => panic!(),
         }
-    }
-}
-
-impl InstructionExcecutor<Utype> for Instruction<Utype> {
-    fn run(&self, core: &mut Core) -> Stage {
-        instruction_trace!(println!("{}", self.to_string()));
-        (self.funct)(core, &self.args.unwrap())
     }
 }

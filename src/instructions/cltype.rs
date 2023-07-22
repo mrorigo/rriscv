@@ -9,7 +9,7 @@ use super::{
     functions::{C0_Funct3, Funct3},
     opcodes::CompressedOpcode,
     CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder, Instruction,
-    InstructionExcecutor, InstructionFormatType, InstructionSelector,
+    InstructionFormatType, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -103,12 +103,5 @@ impl InstructionSelector<CLtype> for CLtype {
             },
             _ => panic!(),
         }
-    }
-}
-
-impl InstructionExcecutor<CLtype> for Instruction<CLtype> {
-    fn run(&self, core: &mut Core) -> Stage {
-        instruction_trace!(println!("{}", self.to_string()));
-        (self.funct)(core, &self.args.unwrap())
     }
 }

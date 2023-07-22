@@ -7,8 +7,7 @@ use crate::{
 
 use super::{
     functions::Funct3, opcodes::CompressedOpcode, CompressedFormatDecoder, CompressedFormatType,
-    ImmediateDecoder, Instruction, InstructionExcecutor, InstructionFormatType,
-    InstructionSelector,
+    ImmediateDecoder, Instruction, InstructionFormatType, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -117,11 +116,5 @@ impl InstructionSelector<CSStype> for CSStype {
             },
             _ => panic!(),
         }
-    }
-}
-impl InstructionExcecutor<CSStype> for Instruction<CSStype> {
-    fn run(&self, core: &mut Core) -> Stage {
-        instruction_trace!(println!("{}", self.to_string()));
-        (self.funct)(core, &self.args.unwrap())
     }
 }

@@ -35,7 +35,7 @@ pub enum TrapCause {
 
     InstructionAddressMisaligned = 0,
     InstructionAccessFault = 1,
-    IllegalInstruction = 2,
+    IllegalInstruction(VAddr) = 2,
     Breakpoint = 3,
     LoadAddressMisaligned = 4,
     LoadAccessFault(VAddr) = 5,
@@ -54,7 +54,7 @@ impl From<TrapCause> for u16 {
         match value {
             TrapCause::InstructionAddressMisaligned => 0,
             TrapCause::InstructionAccessFault => 1,
-            TrapCause::IllegalInstruction => 2,
+            TrapCause::IllegalInstruction(_) => 2,
             TrapCause::Breakpoint => 3,
             TrapCause::LoadAddressMisaligned => 4,
             TrapCause::LoadAccessFault(_) => 5,
@@ -222,7 +222,7 @@ impl Core {
             prev_pc: 0,
             cycles: 0,
             step_cycles: 0,
-            breakpoint_address: None,
+            breakpoint_address: Some(0x80000000),
             wfi: false,
             stage: Stage::FETCH,
             symbols: HashMap::new(),
@@ -278,6 +278,7 @@ impl Core {
 
     pub fn debug_breakpoint(&mut self, cause: TrapCause, mmu: &mut MMU) {
         let debugger = Debugger::create();
+        self.breakpoint_address = None;
         match debugger.enter(self, mmu, cause) {
             DebuggerResult::Continue => {}
             DebuggerResult::ContinueUntil(bp_addr) => self.breakpoint_address = Some(bp_addr),
@@ -289,24 +290,15 @@ impl Core {
     pub fn set_pc(&mut self, pc: u64) {
         if self.symbols.len() > 0 {
             let symbol = self.find_closest_symbol(pc);
-            let last_st = self.symboltrace.back();
+            //            let last_st = self.symboltrace.back();
             match symbol {
                 Some(sym) => {
                     // cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, sym.1));
-                    match last_st {
-                        Some((_last_addr, last_symbol)) => {
-                            if sym.0 == pc && last_symbol.ne(&sym.1) {
-                                //println!("Push symboltrace: {:?}@{:#x?}", sym.1, sym.0);
-                                cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, sym.1));
-                                self.symboltrace.push_back((pc, sym.1));
-                                if self.symboltrace.len() > 20 {
-                                    self.symboltrace.pop_front();
-                                }
-                            }
-                        }
-                        None => {
-                            self.symboltrace.push_back((pc, sym.1));
-                        }
+                    //println!("Push symboltrace: {:?}@{:#x?}", sym.1, sym.0);
+                    cpu_trace!(println!("set_pc = {:#x?}  symbol = {:?}", pc, sym.1));
+                    self.symboltrace.push_back((pc, sym.1));
+                    if self.symboltrace.len() > 50 {
+                        self.symboltrace.pop_front();
                     }
                 }
                 None => {}
@@ -369,6 +361,7 @@ impl Core {
                 self.csrs[CSRRegister::fcsr as usize] |= (value << 5) & 0xe0;
             }
             CSRRegister::sstatus => {
+                //1000000000000000000000000000001100000000000011011110000000000000
                 self.csrs[CSRRegister::mstatus as usize] &= !0x80000003000de162;
                 self.csrs[CSRRegister::mstatus as usize] |= value & 0x80000003000de162;
             }
@@ -386,6 +379,7 @@ impl Core {
             CSRRegister::mstatus => {
                 self.csrs[CSRRegister::mstatus as usize] &= !0x80000003000de162;
                 self.csrs[CSRRegister::mstatus as usize] |= value & 0x80000003000de162;
+                //                self.csrs[CSRRegister::mstatus as usize] = value;
             }
             CSRRegister::time => todo!(),
 
@@ -393,14 +387,14 @@ impl Core {
                 self.csrs[reg as usize] = value;
             }
         }
-        // if reg == CSRRegister::stvec {
-        //     if self.csrs[reg as usize] != old {
-        //         println!(
-        //             "-> {:?} csr set: {:#x?}  ({:#x?})",
-        //             reg, self.csrs[reg as usize], value
-        //         );
-        //     }
-        // }
+        if reg == CSRRegister::sstatus || reg == CSRRegister::mstatus {
+            if self.csrs[reg as usize] != old {
+                println!(
+                    "-> {:?} csr set: {:#x?}  ({:#x?})",
+                    reg, self.csrs[reg as usize], value
+                );
+            }
+        }
 
         //cpu_trace!(println!("write_csr {:#x?} = {:#x?}", reg, value));
     }
@@ -434,7 +428,7 @@ impl Core {
         match self.breakpoint_address {
             None => {}
             Some(addr) => {
-                if self.pc == addr {
+                if self.pc == addr && self.pmode == PrivMode::Supervisor {
                     self.debug_breakpoint(TrapCause::Breakpoint, mmu);
                 }
             }
@@ -464,6 +458,7 @@ impl Core {
         if mip == 0 {
             return None;
         }
+
         let minterrupt = mip & mie;
         if MipMask::has_seip_set(minterrupt) {
             return Some(TrapCause::SupervisorExternalIrq);
@@ -513,7 +508,7 @@ impl Core {
         match value {
             TrapCause::InstructionAddressMisaligned
             | TrapCause::InstructionAccessFault
-            | TrapCause::IllegalInstruction
+            | TrapCause::IllegalInstruction(_)
             | TrapCause::Breakpoint
             | TrapCause::LoadAddressMisaligned
             | TrapCause::LoadAccessFault(_)

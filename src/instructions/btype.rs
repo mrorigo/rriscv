@@ -9,7 +9,7 @@ use crate::{
 
 use super::{
     functions::BRANCH_Funct3, opcodes::MajorOpcode, FormatDecoder, ImmediateDecoder, Instruction,
-    InstructionExcecutor, InstructionFormatType, InstructionSelector, UncompressedFormatType,
+    InstructionFormatType, InstructionSelector, UncompressedFormatType,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -203,12 +203,5 @@ impl InstructionSelector<Btype> for Btype {
             },
             _ => panic!("No such opcode for Btype instruction: {:#?}", self.opcode),
         }
-    }
-}
-
-impl InstructionExcecutor<Btype> for Instruction<Btype> {
-    fn run(&self, core: &mut Core) -> Stage {
-        instruction_trace!(println!("{}", self.to_string()));
-        (self.funct)(core, &self.args.unwrap())
     }
 }

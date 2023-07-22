@@ -5,8 +5,8 @@ use crate::{
 
 macro_rules! instruction_trace {
     ($instr:expr) => {
-        // print!("P:x: ");
-        // $instr;
+        print!("P:x: ");
+        $instr;
     };
 }
 
@@ -63,9 +63,9 @@ pub trait UncompressedFormatType: InstructionFormatType {}
 pub trait CompressedFormatType: InstructionFormatType {}
 
 pub struct Instruction<T> {
-    args: Option<T>,
-    mnemonic: &'static str,
-    funct: fn(&mut Core, &T) -> Stage,
+    pub args: Option<T>,
+    pub mnemonic: &'static str,
+    pub funct: fn(&mut Core, &T) -> Stage,
 }
 
 pub trait FormatDecoder<T: UncompressedFormatType> {
@@ -80,9 +80,9 @@ pub trait ImmediateDecoder<T, T2> {
     fn decode_immediate(i: T) -> T2;
 }
 
-pub trait InstructionExcecutor<T: InstructionFormatType> {
-    fn run(&self, core: &mut Core) -> Stage;
-}
+// pub trait InstructionExcecutor<T: InstructionFormatType> {
+//     fn run(&self, core: &mut Core) -> Stage;
+// }
 
 pub trait InstructionSelector<T> {
     fn select(&self, _xlen: Xlen) -> Instruction<T> {

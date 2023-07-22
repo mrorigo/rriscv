@@ -8,8 +8,8 @@ use crate::{
 };
 
 use super::{
-    opcodes::MajorOpcode, FormatDecoder, ImmediateDecoder, Instruction, InstructionExcecutor,
-    InstructionFormatType, InstructionSelector, UncompressedFormatType,
+    opcodes::MajorOpcode, FormatDecoder, ImmediateDecoder, Instruction, InstructionFormatType,
+    InstructionSelector, UncompressedFormatType,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -38,7 +38,7 @@ impl Display for Instruction<Jtype> {
             write!(f, "{}", self.mnemonic)
         } else {
             let args = self.args.unwrap();
-            write!(f, "{} x{},{}", self.mnemonic, args.rd, args.imm20,)
+            write!(f, "{} x{},{:#x}", self.mnemonic, args.rd, args.imm20)
         }
     }
 }
@@ -57,7 +57,7 @@ impl Instruction<Jtype> {
                 let prev_pc = core.pc();
                 core.set_pc(target);
 
-                instruction_trace!(println!("JAL {:#x?}", target));
+                //instruction_trace!(println!("JAL {:#x?}", target));
                 if args.rd != 0 {
                     Stage::writeback(args.rd, prev_pc)
                 } else {
@@ -86,12 +86,5 @@ impl InstructionSelector<Jtype> for Jtype {
             MajorOpcode::JAL => Instruction::JAL(self),
             _ => panic!(),
         }
-    }
-}
-
-impl InstructionExcecutor<Jtype> for Instruction<Jtype> {
-    fn run(&self, core: &mut Core) -> Stage {
-        instruction_trace!(println!("{}", self.to_string()));
-        (self.funct)(core, &self.args.unwrap())
     }
 }

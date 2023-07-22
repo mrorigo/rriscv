@@ -8,8 +8,7 @@ use crate::{
 use super::{
     functions::{Funct3, Funct5, Funct7, Op32_Funct3, Op_Funct3, RV32M_Funct3, RV64M_Funct3},
     opcodes::MajorOpcode,
-    FormatDecoder, Instruction, InstructionExcecutor, InstructionFormatType, InstructionSelector,
-    UncompressedFormatType,
+    FormatDecoder, Instruction, InstructionFormatType, InstructionSelector, UncompressedFormatType,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -396,12 +395,5 @@ impl InstructionSelector<Rtype> for Rtype {
             },
             _ => panic!(),
         }
-    }
-}
-
-impl InstructionExcecutor<Rtype> for Instruction<Rtype> {
-    fn run(&self, core: &mut Core) -> Stage {
-        instruction_trace!(println!("{}", self.to_string()));
-        (self.funct)(core, &self.args.unwrap())
     }
 }

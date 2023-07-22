@@ -8,8 +8,8 @@ use crate::{
 use super::{
     functions::{C0_Funct3, Funct3},
     opcodes::CompressedOpcode,
-    CompressedFormatDecoder, CompressedFormatType, Instruction, InstructionExcecutor,
-    InstructionFormatType, InstructionSelector,
+    CompressedFormatDecoder, CompressedFormatType, Instruction, InstructionFormatType,
+    InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -75,12 +75,5 @@ impl InstructionSelector<CIWtype> for CIWtype {
             C0_Funct3::C_ADDI4SPN => Instruction::C_ADDI4SPN(self),
             _ => panic!(),
         }
-    }
-}
-
-impl InstructionExcecutor<CIWtype> for Instruction<CIWtype> {
-    fn run(&self, core: &mut Core) -> Stage {
-        instruction_trace!(println!("{}", self.to_string()));
-        (self.funct)(core, &self.args.unwrap())
     }
 }

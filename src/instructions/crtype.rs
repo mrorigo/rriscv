@@ -7,7 +7,7 @@ use crate::{
 
 use super::{
     functions::Funct3, opcodes::CompressedOpcode, CompressedFormatDecoder, CompressedFormatType,
-    Instruction, InstructionExcecutor, InstructionFormatType, InstructionSelector,
+    Instruction, InstructionFormatType, InstructionSelector,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -120,12 +120,5 @@ impl InstructionSelector<CRtype> for CRtype {
             }
             _ => panic!(),
         }
-    }
-}
-
-impl InstructionExcecutor<CRtype> for Instruction<CRtype> {
-    fn run(&self, core: &mut Core) -> Stage {
-        instruction_trace!(println!("{}", self.to_string()));
-        (self.funct)(core, &self.args.unwrap())
     }
 }

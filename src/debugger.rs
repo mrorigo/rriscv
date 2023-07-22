@@ -25,7 +25,7 @@ impl Debugger {
     pub fn enter(&self, core: &mut Core, mmu: &mut MMU, cause: TrapCause) -> DebuggerResult {
         println!("----- DEBUG BREAKPOINT: HALTING CPU\nCause: {:?}", cause);
 
-        self.dump_status(core, mmu);
+        Debugger::dump_status(core, mmu);
 
         match self.main(core, mmu) {
             Ok(result) => result,
@@ -98,7 +98,7 @@ impl Debugger {
                                                 }
                                                 Err(_) => String::from("Invalid Address"),
                                             };
-                                            println!("{:#x?}: {:?}", addr.wrapping_add(poffs), s);
+                                            println!("{:#x?}: {}", addr.wrapping_add(poffs), s);
                                         }
                                         None
                                     }
@@ -134,7 +134,7 @@ impl Debugger {
                                 None
                             }
                             "s" => {
-                                let steps = match split.len() > 0 {
+                                let steps = match split.len() > 1 {
                                     true => match u64::from_str_radix(split[1], 10) {
                                         Ok(value) => value,
                                         Err(_) => 1,
@@ -174,7 +174,7 @@ impl Debugger {
 
     fn dump_memory(&self, _core: &mut Core, _addr: VAddr) {}
 
-    fn dump_status(&self, core: &mut Core, mmu: &mut MMU) {
+    pub fn dump_status(core: &mut Core, mmu: &mut MMU) {
         const STEP: usize = 4;
         for i in (0..32).step_by(STEP) {
             print!("x{}-{}:  ", i, i + (STEP - 1));

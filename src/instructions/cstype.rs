@@ -11,7 +11,7 @@ use super::{
     functions::{C0_Funct3, Funct3},
     opcodes::CompressedOpcode,
     CompressedFormatDecoder, CompressedFormatType, ImmediateDecoder, Instruction,
-    InstructionExcecutor, InstructionFormatType, InstructionSelector,
+    InstructionFormatType, InstructionSelector,
 };
 
 /// This instruction format is shared between C0 and C1 ops, hence it
@@ -180,12 +180,5 @@ impl InstructionSelector<CStype> for CStype {
             },
             _ => panic!(),
         }
-    }
-}
-
-impl InstructionExcecutor<CStype> for Instruction<CStype> {
-    fn run(&self, core: &mut Core) -> Stage {
-        instruction_trace!(println!("{}", self.to_string()));
-        (self.funct)(core, &self.args.unwrap())
     }
 }
