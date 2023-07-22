@@ -1,6 +1,7 @@
 use elfloader::ElfBinary;
 use rriscv::{
-    cpu, elf,
+    cpu::{self, CSRRegister},
+    elf,
     memory::{Memory, MemoryAccessWidth, MemoryOperations},
 };
 
@@ -23,7 +24,7 @@ fn main() {
 
     loop {
         cpu.cycle();
-        println!("---");
+        println!("--- minstret: {}", cpu.read_csr(CSRRegister::minstret));
     }
     // cpu.cycle();
     // cpu.cycle();
