@@ -44,6 +44,7 @@ impl Instruction<Itype> {
             args: Some(itype),
             funct: |core, args| {
                 let csr_register = num::FromPrimitive::from_u16(args.imm12).unwrap();
+                // "If rd=x0, then the instruction shall not read the CSR"
                 let csrv = if args.rd != 0 {
                     Some(core.read_csr(csr_register))
                 } else {
@@ -92,9 +93,29 @@ impl Instruction<Itype> {
                 let rs1v = core.read_register(args.rs1) as i64;
                 let seimm = (args.imm12 as u64).sign_extend(64 - 12);
                 let value = core.bit_extend(rs1v.wrapping_add(seimm as i64)) as u64;
+                // debug_trace!(println!(
+                //     "ADDI x{}, x{}, {}  ; x{} = {:#x?}",
+                //     args.rd, args.rs1, seimm as i64, args.rd, value
+                // ));
+                Stage::WRITEBACK(Some(WritebackStage {
+                    register: args.rd,
+                    value,
+                }))
+            },
+        }
+    }
+
+    pub fn ORI(itype: Itype) -> Instruction<Itype> {
+        Instruction {
+            mnemonic: &"ORI",
+            args: Some(itype),
+            funct: |core, args| {
+                let rs1v = core.read_register(args.rs1) as i64;
+                let seimm = (args.imm12 as u64).sign_extend(64 - 12);
+                let value = core.bit_extend(rs1v | seimm as i64) as u64;
                 debug_trace!(println!(
-                    "ADDI x{}, x{}, {}  ; x{} = {:#x?}",
-                    args.rd, args.rs1, seimm as i64, args.rd, value
+                    "ORI x{}, x{}, {:#x?}  ; x{} = {:#x?}",
+                    args.rd, args.rs1, seimm as u64, args.rd, value
                 ));
                 Stage::WRITEBACK(Some(WritebackStage {
                     register: args.rd,
@@ -125,6 +146,7 @@ impl InstructionSelector<Itype> for Itype {
         match self.opcode {
             MajorOpcode::OP_IMM => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
                 OpImmFunct3::ADDI => Instruction::ADDI(*self),
+                OpImmFunct3::ORI => Instruction::ORI(*self),
                 _ => panic!(),
             },
             MajorOpcode::SYSTEM => match num::FromPrimitive::from_u8(self.funct3).unwrap() {
@@ -139,6 +161,7 @@ impl InstructionSelector<Itype> for Itype {
 
 impl InstructionExcecutor for Instruction<Itype> {
     fn run(&self, core: &mut Core) -> Stage {
+        debug_trace!(println!("{}", self.to_string()));
         (self.funct)(core, &self.args.unwrap())
     }
 }
