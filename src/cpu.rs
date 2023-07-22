@@ -1,7 +1,5 @@
-use std::collections::HashSet;
-
-use crate::instructions::Instruction;
-use crate::memory::{Memory, MemoryOperations};
+use crate::memory::MemoryOperations;
+use crate::mmu::MMU;
 use crate::pipeline::{PipelineStages, Stage};
 
 pub type Register = u8;
@@ -99,7 +97,7 @@ pub struct Core<'a> {
     registers: Registers,
     csrs: CSRRegisters,
     pub pmode: PrivMode,
-    pub memory: &'a mut dyn MemoryOperations<Memory>,
+    pub mmu: &'a mut dyn MemoryOperations<MMU>,
     pub pc: u64,
     pub prev_pc: u64,
     pub stage: Stage,
@@ -107,7 +105,7 @@ pub struct Core<'a> {
 }
 
 impl<'a> Core<'a> {
-    pub fn create(id: u64, memory: &'a mut impl MemoryOperations<Memory>) -> Core<'a> {
+    pub fn create(id: u64, mmu: &'a mut impl MemoryOperations<MMU>) -> Core<'a> {
         let registers: [RegisterValue; 32] = [0; 32];
         let mut csrs: [RegisterValue; 4096] = [0; 4096];
         csrs[CSRRegister::mhartid as usize] = id;
@@ -118,7 +116,7 @@ impl<'a> Core<'a> {
             registers,
             csrs,
             pmode: PrivMode::Machine,
-            memory,
+            mmu,
             pc: 0,
             prev_pc: 0,
             cycles: 0,

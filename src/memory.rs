@@ -15,16 +15,16 @@ pub enum MemoryAccessWidth {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct MemorySegment {
+pub struct RAM {
     pub base_address: VAddr,
     pub size: usize,
     data: *mut u8,
 }
 
-#[derive(Debug)]
-pub struct Memory {
-    pub segments: Vec<MemorySegment>,
-}
+// #[derive(Debug)]
+// pub struct Memory {
+//     pub segments: Vec<MemorySegment>,
+// }
 
 #[allow(unused_variables)]
 pub trait MemoryOperations<T>: std::fmt::Debug {
@@ -35,25 +35,10 @@ pub trait MemoryOperations<T>: std::fmt::Debug {
         value: u64,
         memory_access_width: MemoryAccessWidth,
     ) -> bool;
-    fn add_segment(&mut self, base_address: VAddr, size: usize);
+    //    fn add_segment(&mut self, base_address: VAddr, size: usize);
 }
 
-impl MemoryOperations<Memory> for Memory {
-    fn write_single(&mut self, addr: VAddr, value: u64, maw: MemoryAccessWidth) -> bool {
-        let mut segment = self.find_segment(addr).unwrap();
-        segment.write_single(addr, value, maw)
-    }
-    fn read_single(&self, addr: VAddr, maw: MemoryAccessWidth) -> Option<u64> {
-        self.find_segment(addr).unwrap().read_single(addr, maw)
-    }
-
-    fn add_segment(&mut self, base_address: VAddr, size: usize) {
-        let segment = MemorySegment::create(base_address, size);
-        self.segments.push(segment);
-    }
-}
-
-impl MemorySegment {
+impl MemoryOperations<RAM> for RAM {
     fn write_single(&mut self, addr: VAddr, value: u64, maw: MemoryAccessWidth) -> bool {
         //        println!("write_single @ {:#x} base={:#x}", addr, self.base_address);
         assert!(
@@ -122,8 +107,8 @@ impl MemorySegment {
     }
 }
 
-impl MemorySegment {
-    pub fn create(base_address: u64, size: usize) -> MemorySegment {
+impl RAM {
+    pub fn create(base_address: u64, size: usize) -> RAM {
         let data = Vec::<u8>::with_capacity(size).as_mut_ptr();
         mem::forget(data);
         for i in 0..size {
@@ -131,7 +116,7 @@ impl MemorySegment {
                 data.offset(i as isize).write(0);
             }
         }
-        MemorySegment {
+        RAM {
             base_address,
             size,
             data: data,
@@ -139,35 +124,35 @@ impl MemorySegment {
     }
 }
 
-impl Memory {
-    pub fn create() -> impl MemoryOperations<Memory> {
-        Memory {
-            segments: Vec::new(),
-        }
-    }
+// impl Memory {
+//     pub fn create() -> impl MemoryOperations<Memory> {
+//         Memory {
+//             segments: Vec::new(),
+//         }
+//     }
 
-    fn find_segment(&self, addr: VAddr) -> Option<MemorySegment> {
-        match self.segments.iter().find(|&s| {
-            s.base_address <= addr && s.base_address.saturating_add(s.size as u64) > addr
-        }) {
-            Some(segment) => Some(*segment),
-            None => {
-                panic!("Missing memory segment for {:#x?}", addr);
-                None
-            }
-        }
-    }
+//     fn find_segment(&self, addr: VAddr) -> Option<MemorySegment> {
+//         match self.segments.iter().find(|&s| {
+//             s.base_address <= addr && s.base_address.saturating_add(s.size as u64) > addr
+//         }) {
+//             Some(segment) => Some(*segment),
+//             None => {
+//                 panic!("Missing memory segment for {:#x?}", addr);
+//                 None
+//             }
+//         }
+//     }
 
-    // pub fn dump(&self, addr: usize, count: usize) {
-    //     for i in 0..count as isize {
-    //         unsafe {
-    //             print!(
-    //                 "{:#x?} ",
-    //                 self.data
-    //                     .offset(i + (addr - self.base_address as usize) as isize)
-    //                     .read()
-    //             )
-    //         };
-    //     }
-    // }
-}
+//     // pub fn dump(&self, addr: usize, count: usize) {
+//     //     for i in 0..count as isize {
+//     //         unsafe {
+//     //             print!(
+//     //                 "{:#x?} ",
+//     //                 self.data
+//     //                     .offset(i + (addr - self.base_address as usize) as isize)
+//     //                     .read()
+//     //             )
+//     //         };
+//     //     }
+//     // }
+// }

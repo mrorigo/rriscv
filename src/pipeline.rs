@@ -59,7 +59,7 @@ pub trait PipelineStages {
 impl PipelineStages for Core<'_> {
     fn fetch(&mut self) -> Stage {
         let instruction = self
-            .memory
+            .mmu
             .read_single(self.pc, MemoryAccessWidth::WORD)
             .unwrap() as u32;
 
@@ -119,49 +119,49 @@ impl PipelineStages for Core<'_> {
             MemoryAccess::READ8(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
                 register: register,
                 value: self
-                    .memory
+                    .mmu
                     .read_single(offset, MemoryAccessWidth::BYTE)
                     .unwrap(),
             })),
             MemoryAccess::READ16(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
                 register: register,
                 value: self
-                    .memory
+                    .mmu
                     .read_single(offset, MemoryAccessWidth::HALFWORD)
                     .unwrap(),
             })),
             MemoryAccess::READ32(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
                 register: register,
                 value: self
-                    .memory
+                    .mmu
                     .read_single(offset, MemoryAccessWidth::WORD)
                     .unwrap(),
             })),
             MemoryAccess::READ64(offset, register) => Stage::WRITEBACK(Some(WritebackStage {
                 register: register,
                 value: self
-                    .memory
+                    .mmu
                     .read_single(offset, MemoryAccessWidth::LONG)
                     .unwrap(),
             })),
             MemoryAccess::WRITE8(offset, value) => {
-                self.memory
+                self.mmu
                     .write_single(offset, value as u64, MemoryAccessWidth::BYTE);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE16(offset, value) => {
-                self.memory
+                self.mmu
                     .write_single(offset, value as u64, MemoryAccessWidth::HALFWORD);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE32(offset, value) => {
-                self.memory
+                self.mmu
                     .write_single(offset, value as u64, MemoryAccessWidth::WORD);
                 Stage::WRITEBACK(None)
             }
             MemoryAccess::WRITE64(offset, value) => {
                 println!("cpu::memory::WRITE64: {:#x?} @ {:#x?}", value, offset);
-                self.memory
+                self.mmu
                     .write_single(offset, value as u64, MemoryAccessWidth::LONG);
                 Stage::WRITEBACK(None)
             }

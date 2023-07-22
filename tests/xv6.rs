@@ -2,7 +2,6 @@ use elfloader::ElfBinary;
 use rriscv::{
     cpu::{self, CSRRegister},
     elf,
-    memory::{Memory, MemoryAccessWidth, MemoryOperations},
     mmu::MMU,
     pipeline::Stage,
 };
@@ -16,11 +15,12 @@ fn main() {
     let plic_base = 0x0c000000;
 
     let mmu = MMU::create();
+    mmu.dump_device_table();
 
-    let memory = &mut Memory::create();
-    memory.add_segment(vbase, 138560);
-    memory.add_segment(clint_base, 0xc000);
-    memory.add_segment(plic_base, 0x200000 + 0x2000 * 8);
+    let memory = &mut MMU::create();
+    // memory.add_segment(vbase, 138560);
+    // memory.add_segment(clint_base, 0xc000);
+    // memory.add_segment(plic_base, 0x200000 + 0x2000 * 8);
 
     let binary_blob = fs::read("tests/xv6/kernel").expect("Can't read kernel binary");
     //let binary_blob = fs::read("./test").expect("Can't read kernel binary");

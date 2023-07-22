@@ -3,7 +3,7 @@ use std::time::Instant;
 use rriscv::{
     cpu,
     instructions::{utype::Utype, Instruction, InstructionExcecutor},
-    memory::{Memory, MemoryOperations},
+    mmu::MMU,
     pipeline::Stage,
 };
 const VBASE: u64 = 0x8000_0000;
@@ -24,8 +24,8 @@ pub fn perf_auipc() {
     };
     let iterations = 10000000;
 
-    let memory = &mut Memory::create();
-    memory.add_segment(VBASE, 4096);
+    let memory = &mut MMU::create();
+    //memory.add_segment(VBASE, 4096);
     let mut core = cpu::Core::create(0x0, memory);
     let mut sum: u64 = 0;
 

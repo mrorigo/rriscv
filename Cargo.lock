@@ -38,6 +38,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "include_bytes_aligned"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c8a60cb7114d39fab45befc10806ac4c5ff7effd29574bfd397e1e3d3d31baa"
+
+[[package]]
 name = "log"
 version = "0.4.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -163,6 +169,7 @@ version = "0.1.0"
 dependencies = [
  "dtb",
  "elfloader",
+ "include_bytes_aligned",
  "num",
  "num-derive",
  "num-traits",

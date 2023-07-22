@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 dtb = "0.2.0"
 elfloader = "0.16.0"
+include_bytes_aligned = "0.1.2"
 num = "0.4.0"
 num-derive = "0.3.3"
 num-traits = "0.2.15"

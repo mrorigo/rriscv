@@ -13,7 +13,7 @@ use rriscv::{
         stype::Stype,
     },
     instructions::{decoder::InstructionDecoder, utype::Utype},
-    memory::{Memory, MemoryOperations},
+    mmu::MMU,
     pipeline::RawInstruction,
 };
 
@@ -27,8 +27,8 @@ macro_rules! test_case {
             //let memory = Memory::create();
             //memory.add_segment(VBASE, 4096);
 
-            let memory = &mut Memory::create();
-            memory.add_segment(VBASE, 4096);
+            let memory = &mut MMU::create();
+            //memory.add_segment(VBASE, 4096);
 
             let core = cpu::Core::create(0x0, memory);
             $a.run(core)

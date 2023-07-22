@@ -3,12 +3,10 @@ use crate::{
     pipeline::Stage,
 };
 
-use self::itype::Itype;
-
 macro_rules! debug_trace {
     ($instr:expr) => {
-        print!("DEBUG_TRACE: ");
-        $instr;
+        // print!("DEBUG_TRACE: ");
+        // $instr;
     };
 }
 
@@ -65,7 +63,7 @@ pub trait CompressedFormatType {}
 pub struct Instruction<T> {
     args: Option<T>,
     mnemonic: &'static str,
-    funct: fn(&mut Core<'_>, &T) -> Stage,
+    funct: fn(&mut Core, &T) -> Stage,
 }
 
 pub trait FormatDecoder<T: InstructionFormatType> {
