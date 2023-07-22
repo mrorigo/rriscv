@@ -68,8 +68,6 @@ pub struct Instruction<T> {
     funct: fn(&mut Core, &T) -> Stage,
 }
 
-pub trait InstructionType {}
-
 pub trait FormatDecoder<T: UncompressedFormatType> {
     fn decode(word: u32) -> T;
 }
